@@ -1,0 +1,243 @@
+.crew-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 760px) {
+  .crew-grid {
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  }
+}
+
+.crew-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.crew-card__head {
+  display: flex;
+  gap: 12px;
+  padding: 16px 16px 12px;
+}
+
+.crew-card__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.crew-card__info > .btn {
+  align-self: flex-start;
+  margin-top: 4px;
+  margin-left: -10px;
+}
+
+.crew-card__line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fg-muted);
+  font-size: 0.9375rem;
+}
+
+.crew-card__line svg {
+  width: 16px;
+  height: 16px;
+}
+
+.crew-card__schedule {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.8125rem;
+  margin-top: 6px;
+}
+
+.crew-card__schedule span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crew-card__members {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px;
+}
+
+.crew-card__member {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.crew-card__member > div {
+  min-width: 0;
+}
+
+.crew-card__name {
+  font-size: 1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crew-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 4px 8px;
+}
+
+/* ----- Formulario ----- */
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+}
+
+.form-section__hint {
+  font-size: 0.8125rem;
+  color: var(--fg-muted);
+  margin-top: -4px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 900px) {
+  .form-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .form-grid > .form-grid__full {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ----- Turnos ----- */
+.shift-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.shift-row__text {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.9375rem;
+}
+
+.shift-row__badge {
+  margin-left: 6px;
+}
+
+.time-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* ----- Semana ----- */
+.week-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.week-nav h2 {
+  flex: 1;
+  text-align: center;
+}
+
+.week-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  font-size: 0.8125rem;
+  color: var(--fg-muted);
+}
+
+.week-legend span::before {
+  content: '';
+  display: inline-block;
+  width: 18px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 8px;
+  vertical-align: middle;
+  background: var(--legend-color);
+}
+
+.week-grid {
+  display: grid;
+  grid-template-columns: 28px repeat(7, 1fr);
+  gap: 0;
+}
+
+.week-grid__day {
+  text-align: center;
+  font-size: 0.6875rem;
+  color: var(--fg-muted);
+  padding-bottom: 4px;
+  line-height: 1.2;
+}
+
+.week-crew {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.week-crew__title {
+  font-weight: 600;
+  font-size: 0.875rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.week-hours {
+  position: relative;
+  height: var(--week-col-height);
+}
+
+.week-hours span {
+  position: absolute;
+  left: 0;
+  font-size: 9px;
+  color: var(--fg-muted);
+  transform: translateY(-50%);
+}
+
+.week-col {
+  position: relative;
+  height: var(--week-col-height);
+  background: var(--surface);
+  border: 0.5px solid var(--outline-variant);
+  overflow: hidden;
+}
+
+.week-col__grid {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0.5px;
+  background: var(--outline-variant);
+}
+
+.week-span {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  border-radius: 2px;
+}

@@ -1,0 +1,30 @@
+.admin-row {
+  padding: 8px 8px 8px 14px;
+}
+
+.admin-row .list-row__title {
+  display: flex;
+  align-items: center;
+}
+
+.admin-row--button {
+  width: 100%;
+  text-align: left;
+  color: inherit;
+  border-radius: var(--radius-sm);
+}
+
+.admin-row--button:hover:not(:disabled) {
+  background: rgba(0, 214, 160, 0.08);
+}
+
+.admin-row--button > svg {
+  color: var(--brand-accent);
+}
+
+.admin-empty {
+  padding: 20px 16px;
+  text-align: center;
+  color: var(--fg-muted);
+  font-size: 0.9375rem;
+}

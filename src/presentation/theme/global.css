@@ -1,0 +1,222 @@
+/* Paleta de marca TrafficNexus. Siempre oscura: pensada para uso en campo, de día y de noche. */
+:root {
+  --asphalt: #0e1115;
+  --logo-ink: #080c13;
+  --graphite: #161a20;
+  --graphite-high: #1e232b;
+  --graphite-highest: #272d36;
+  --surface-lowest: #0a0c0f;
+
+  --brand-primary: #435570;
+  --brand-accent: #00d6a0;
+  --brand-text: #15191e;
+  --brand-canvas: #f3f5f7;
+  --brand-surface: #687587;
+
+  --status-alert: #e53935;
+  --status-caution: #ffc928;
+  --status-operative: #00b982;
+
+  --fog: #e8edf2;
+  --steel-light: #b7c0cc;
+
+  --secondary-container: #2c3542;
+  --tertiary-container: #12382c;
+  --on-tertiary-container: #b8f3de;
+  --error-container: #5c1a16;
+  --on-error-container: #ffdad5;
+  --outline-variant: #2c333c;
+
+  --bg: var(--asphalt);
+  --fg: var(--fog);
+  --fg-muted: var(--steel-light);
+  --surface: var(--graphite);
+  --surface-high: var(--graphite-high);
+  --surface-highest: var(--graphite-highest);
+  --outline: var(--brand-surface);
+
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-2: 0 8px 28px rgba(0, 0, 0, 0.45);
+
+  --nav-height: 64px;
+  --sidebar-width: 248px;
+
+  --font-sans:
+    'Inter', 'Segoe UI', system-ui, -apple-system, 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', Consolas, 'Courier New', monospace;
+
+  color-scheme: dark;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  overflow: hidden;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 1.375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+h3 {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+a {
+  color: var(--brand-accent);
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+::selection {
+  background: rgba(0, 214, 160, 0.35);
+}
+
+/* Barras de scroll discretas */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--graphite-highest) transparent;
+}
+
+/* Utilidades */
+.muted {
+  color: var(--fg-muted);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.label {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.signal-marks {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.signal-marks span {
+  width: 22px;
+  height: 4px;
+  border-radius: 2px;
+}
+
+.signal-marks span:nth-child(1) {
+  background: var(--status-alert);
+}
+
+.signal-marks span:nth-child(2) {
+  background: var(--status-caution);
+}
+
+.signal-marks span:nth-child(3) {
+  background: var(--brand-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
