@@ -8,7 +8,7 @@ conectada al backend Go `TrafficNexusBackCore`.
 - **Vehículos**: placas, cajas por grupo del inventario, cantidades, consumos (operadores), chequeos de herramienta,
   mover caja entre placas, historial de movimientos y chequeos.
 - **Inventario**: grupos (herramienta / consumible) e ítems, renombrar, reordenar, eliminar con bloqueo si hay stock.
-- **Externos**: mapa (Leaflet + CARTO dark, sin llave de Google), carga de KML/KMZ, búsqueda, frentes de trabajo
+- **Externos**: mapa Google Maps (estilo oscuro de la app Android), carga de KML/KMZ, búsqueda, frentes de trabajo
   (WF#), capas persistidas, detalle del punto y versiones del mapa.
 - **Admin**: usuarios (crear/editar/eliminar, generar contraseña), miembros del proyecto, proyectos.
 
@@ -34,6 +34,7 @@ siempre con el mismo origen y **no hace falta CORS** en el backend.
 | ----------------------- | ----------------------------------------------------------------------------------------------------- |
 | `VITE_API_BASE_URL`     | Base del API en el bundle. Vacío = mismo origen (recomendado). Ej.: `https://api.midominio.com`       |
 | `VITE_DEV_PROXY_TARGET` | Solo desarrollo: a dónde reenvía Vite las llamadas `/v1`. Por defecto `http://localhost:8080`         |
+| `VITE_GOOGLE_MAPS_KEY`  | API key de Maps JavaScript API (restricción por sitios web). Obligatoria para la pantalla Externos.   |
 
 ## Scripts
 

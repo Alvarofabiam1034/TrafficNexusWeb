@@ -6,33 +6,20 @@
   background: var(--asphalt);
 }
 
+.externals__map-host {
+  position: absolute;
+  inset: 0;
+}
+
 .externals__map {
   position: absolute;
   inset: 0;
   background: var(--asphalt);
 }
 
-.externals__map .leaflet-control-attribution {
-  background: rgba(8, 12, 19, 0.75);
-  color: var(--fg-muted);
-  font-size: 10px;
-}
-
-.externals__map .leaflet-control-attribution a {
-  color: var(--brand-accent);
-}
-
-.externals__map .leaflet-tooltip {
-  background: var(--graphite-highest);
-  color: var(--fg);
-  border: 1px solid var(--outline-variant);
-  border-radius: var(--radius-sm);
-  font-size: 0.75rem;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-}
-
-.externals__map .leaflet-tooltip-top::before {
-  border-top-color: var(--outline-variant);
+.externals__map .gm-style-cc,
+.externals__map .gm-style a[href^='https://maps.google.com/maps'] {
+  display: none !important;
 }
 
 /* ----- Controles flotantes ----- */
@@ -43,7 +30,8 @@
   right: 12px;
   display: flex;
   gap: 8px;
-  z-index: 1000;
+  /* Por encima de los chips WF: la lista de búsqueda no debe quedar detrás. */
+  z-index: 1100;
   pointer-events: none;
 }
 

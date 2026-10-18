@@ -1,15 +1,14 @@
-import type { LatLngBoundsExpression, LatLngExpression } from 'leaflet'
 import { ExternalLink, FileUp, History, Layers, MapPin, Route, Search, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
-import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip, useMap } from 'react-leaflet'
 
 import { useContainer, useIsAdmin } from '@/application/ContainerContext'
 import { useImportMap, useLatestMap, useMapVersion, useMapVersions } from '@/application/hooks/useMap'
 import { messageOf } from '@/domain/errors'
 import { workfronts, type Workfront } from '@/domain/map/workfronts'
-import { argbToCss, EMPTY_MAP, type MapPlace, type StoredMap } from '@/domain/model/map'
+import { EMPTY_MAP, type MapPlace, type StoredMap } from '@/domain/model/map'
 import type { LayerPreferences } from '@/domain/repository'
 import { parseKmlFile } from '@/infrastructure/kml/kmlParser'
+import type { MapCameraTarget } from '@/infrastructure/maps/googleMaps'
 import { Button, IconButton } from '@/presentation/components/Button'
 import { Dialog } from '@/presentation/components/Dialog'
 import { ErrorState, InlineMessage, Loading } from '@/presentation/components/States'
@@ -17,17 +16,10 @@ import { Switch } from '@/presentation/components/Switch'
 import { useToast } from '@/presentation/components/Toast'
 import { formatDateTime, plural } from '@/presentation/i18n/labels'
 
+import { GoogleMapView } from './GoogleMapView'
 import './externals.css'
 
-/** Centro por defecto: Bogotá, igual que la app. */
-const BOGOTA: LatLngExpression = [4.6483, -74.1036]
-const DEFAULT_ZOOM = 12
-const TILE_URL = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-const TILE_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
 const MAX_FILE_BYTES = 25 * 1024 * 1024
-const PLACE_COLOR = '#00D6A0'
-const SELECTED_COLOR = '#FFC928'
 
 export default function ExternalsPage() {
   const latest = useLatestMap()
@@ -82,7 +74,7 @@ function ExternalsMap({
   const [versionsOpen, setVersionsOpen] = useState(false)
   const [layersOpen, setLayersOpen] = useState(false)
   const [importing, setImporting] = useState(false)
-  const [target, setTarget] = useState<{ bounds?: LatLngBoundsExpression; center?: LatLngExpression; key: number }>({ key: 0 })
+  const [target, setTarget] = useState<MapCameraTarget | null>(null)
 
   useEffect(() => preferences.saveLayers(layers), [layers, preferences])
 
@@ -117,16 +109,21 @@ function ExternalsMap({
   const focusPlace = (place: MapPlace) => {
     setSelectedPlaceId(place.id)
     setQuery('')
-    setTarget((prev) => ({ key: prev.key + 1, center: [place.latitude, place.longitude] }))
+    setTarget((prev) => ({
+      key: (prev?.key ?? 0) + 1,
+      kind: 'center',
+      center: { lat: place.latitude, lng: place.longitude },
+      zoom: 16,
+    }))
   }
 
   const focusAll = (places: readonly MapPlace[], lines: typeof map.lines) => {
-    const points: [number, number][] = [
-      ...places.map((place): [number, number] => [place.latitude, place.longitude]),
-      ...lines.flatMap((line) => line.points.map((point): [number, number] => [point.latitude, point.longitude])),
+    const points = [
+      ...places.map((place) => ({ lat: place.latitude, lng: place.longitude })),
+      ...lines.flatMap((line) => line.points.map((point) => ({ lat: point.latitude, lng: point.longitude }))),
     ]
     if (points.length === 0) return
-    setTarget((prev) => ({ key: prev.key + 1, bounds: points }))
+    setTarget((prev) => ({ key: (prev?.key ?? 0) + 1, kind: 'bounds', points }))
   }
 
   const chooseFront = (number: number | null) => {
@@ -157,7 +154,9 @@ function ExternalsMap({
       }
       await importMap.mutateAsync(parsed)
       onSelectVersion(null)
-      toast.success(`Mapa actualizado: ${plural(parsed.places.length, 'punto', 'puntos')} y ${plural(parsed.lines.length, 'trazo', 'trazos')}`)
+      toast.success(
+        `Mapa actualizado: ${plural(parsed.places.length, 'punto', 'puntos')} y ${plural(parsed.lines.length, 'trazo', 'trazos')}`,
+      )
       focusAll(parsed.places, parsed.lines)
     } catch (error) {
       toast.error(messageOf(error, 'No se pudo leer el archivo KML/KMZ'))
@@ -170,46 +169,16 @@ function ExternalsMap({
 
   return (
     <div className="externals">
-      <MapContainer center={BOGOTA} zoom={DEFAULT_ZOOM} className="externals__map" zoomControl={false} preferCanvas>
-        <TileLayer url={TILE_URL} attribution={TILE_ATTRIBUTION} subdomains="abcd" maxZoom={20} />
-        <ViewController target={target} />
-        {layers.linesVisible
-          ? visibleLines.map((line) => (
-              <Polyline
-                key={line.id}
-                positions={line.points.map((point): [number, number] => [point.latitude, point.longitude])}
-                pathOptions={{ color: argbToCss(line.colorArgb), weight: Math.max(2, line.width / 2), opacity: 0.9 }}
-              >
-                {line.name ? <Tooltip sticky>{line.name}</Tooltip> : null}
-              </Polyline>
-            ))
-          : null}
-        {layers.pointsVisible
-          ? visiblePlaces.map((place) => {
-              const selected = place.id === selectedPlaceId
-              return (
-                <CircleMarker
-                  key={place.id}
-                  center={[place.latitude, place.longitude]}
-                  radius={selected ? 9 : 6}
-                  pathOptions={{
-                    color: selected ? SELECTED_COLOR : PLACE_COLOR,
-                    fillColor: selected ? SELECTED_COLOR : PLACE_COLOR,
-                    fillOpacity: 0.85,
-                    weight: selected ? 3 : 1.5,
-                  }}
-                  eventHandlers={{ click: () => setSelectedPlaceId(place.id) }}
-                >
-                  <Tooltip direction="top" offset={[0, -6]}>
-                    {place.name}
-                  </Tooltip>
-                </CircleMarker>
-              )
-            })
-          : null}
-      </MapContainer>
+      <GoogleMapView
+        places={visiblePlaces}
+        lines={visibleLines}
+        pointsVisible={layers.pointsVisible}
+        linesVisible={layers.linesVisible}
+        selectedPlaceId={selectedPlaceId}
+        target={target}
+        onSelectPlace={setSelectedPlaceId}
+      />
 
-      {/* Barra superior: búsqueda + acciones */}
       <div className="externals__top">
         <div className="externals__search">
           <Search size={18} />
@@ -229,7 +198,12 @@ function ExternalsMap({
             <ul className="externals__results" role="listbox">
               {results.map((place) => (
                 <li key={place.id}>
-                  <button type="button" role="option" aria-selected={place.id === selectedPlaceId} onClick={() => focusPlace(place)}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={place.id === selectedPlaceId}
+                    onClick={() => focusPlace(place)}
+                  >
                     <MapPin size={16} />
                     <span>{place.name}</span>
                   </button>
@@ -262,7 +236,11 @@ function ExternalsMap({
 
       {fronts.length > 0 ? (
         <div className="externals__fronts chip-row">
-          <button type="button" className={['chip', workfront === null ? 'chip--selected' : ''].join(' ')} onClick={() => chooseFront(null)}>
+          <button
+            type="button"
+            className={['chip', workfront === null ? 'chip--selected' : ''].join(' ')}
+            onClick={() => chooseFront(null)}
+          >
             Todos
           </button>
           {fronts.map((front) => (
@@ -318,13 +296,21 @@ function ExternalsMap({
             <span>
               <MapPin size={18} /> Puntos
             </span>
-            <Switch checked={layers.pointsVisible} onChange={(pointsVisible) => setLayers({ ...layers, pointsVisible })} label="Mostrar puntos" />
+            <Switch
+              checked={layers.pointsVisible}
+              onChange={(pointsVisible) => setLayers({ ...layers, pointsVisible })}
+              label="Mostrar puntos"
+            />
           </label>
           <label className="row externals__layer">
             <span>
               <Route size={18} /> Trazos
             </span>
-            <Switch checked={layers.linesVisible} onChange={(linesVisible) => setLayers({ ...layers, linesVisible })} label="Mostrar trazos" />
+            <Switch
+              checked={layers.linesVisible}
+              onChange={(linesVisible) => setLayers({ ...layers, linesVisible })}
+              label="Mostrar trazos"
+            />
           </label>
           <p className="muted" style={{ fontSize: '0.8125rem' }}>
             {plural(map.places.length, 'punto', 'puntos')} · {plural(map.lines.length, 'trazo', 'trazos')} ·{' '}
@@ -345,22 +331,6 @@ function ExternalsMap({
       />
     </div>
   )
-}
-
-/** Mueve el mapa cuando cambia el objetivo (centro o límites). */
-function ViewController({ target }: { target: { bounds?: LatLngBoundsExpression; center?: LatLngExpression; key: number } }) {
-  const map = useMap()
-  useEffect(() => {
-    if (target.bounds) map.fitBounds(target.bounds, { padding: [48, 48], maxZoom: 17 })
-    else if (target.center) map.flyTo(target.center, Math.max(map.getZoom(), 16), { duration: 0.6 })
-  }, [map, target])
-  useEffect(() => {
-    // El contenedor puede cambiar de tamaño con la barra lateral.
-    const observer = new ResizeObserver(() => map.invalidateSize())
-    observer.observe(map.getContainer())
-    return () => observer.disconnect()
-  }, [map])
-  return null
 }
 
 function PlaceCard({ place, onClose }: { place: MapPlace; onClose: () => void }) {
@@ -388,7 +358,12 @@ function PlaceCard({ place, onClose }: { place: MapPlace; onClose: () => void })
         </p>
       ) : null}
       <div className="row" style={{ justifyContent: 'flex-end' }}>
-        <Button variant="text" size="sm" icon={<ExternalLink />} onClick={() => window.open(mapsUrl, '_blank', 'noopener,noreferrer')}>
+        <Button
+          variant="text"
+          size="sm"
+          icon={<ExternalLink />}
+          onClick={() => window.open(mapsUrl, '_blank', 'noopener,noreferrer')}
+        >
           Abrir en Google Maps
         </Button>
       </div>
@@ -435,7 +410,11 @@ function VersionsDialog({
                 <span className="list-row__main">
                   <span className="list-row__title">
                     Versión {version.versionNumber}
-                    {isLatest ? <span className="badge badge--accent" style={{ marginLeft: 8 }}>Actual</span> : null}
+                    {isLatest ? (
+                      <span className="badge badge--accent" style={{ marginLeft: 8 }}>
+                        Actual
+                      </span>
+                    ) : null}
                   </span>
                   <span className="list-row__sub">
                     {version.createdByName || 'Sistema'} · {formatDateTime(version.createdAt)}
