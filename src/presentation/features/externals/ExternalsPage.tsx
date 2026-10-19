@@ -1,9 +1,10 @@
-import { ExternalLink, FileUp, History, Layers, MapPin, Route, Search, X } from 'lucide-react'
+import { ExternalLink, FileText, FileUp, History, Layers, MapPin, Route, Search, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 
 import { useContainer, useIsAdmin } from '@/application/ContainerContext'
 import { useImportMap, useLatestMap, useMapVersion, useMapVersions } from '@/application/hooks/useMap'
 import { messageOf } from '@/domain/errors'
+import { drivePreviewUrl } from '@/domain/map/drivePreview'
 import { workfronts, type Workfront } from '@/domain/map/workfronts'
 import { EMPTY_MAP, type MapPlace, type StoredMap } from '@/domain/model/map'
 import type { LayerPreferences } from '@/domain/repository'
@@ -335,6 +336,12 @@ function ExternalsMap({
 
 function PlaceCard({ place, onClose }: { place: MapPlace; onClose: () => void }) {
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${place.latitude},${place.longitude}`
+  const previewUrl = place.documentation ? drivePreviewUrl(place.documentation) : null
+  const openDocumentation = () => {
+    const href = previewUrl ?? place.documentation
+    if (href) window.open(href, '_blank', 'noopener,noreferrer')
+  }
+
   return (
     <aside className="externals__place card" aria-label={`Detalle de ${place.name}`}>
       <div className="externals__place-head">
@@ -352,12 +359,12 @@ function PlaceCard({ place, onClose }: { place: MapPlace; onClose: () => void })
         </IconButton>
       </div>
       {place.description ? <p className="externals__place-text">{place.description}</p> : null}
-      {place.documentation ? (
-        <p className="externals__place-text muted" style={{ fontSize: '0.8125rem' }}>
-          {place.documentation}
-        </p>
-      ) : null}
-      <div className="row" style={{ justifyContent: 'flex-end' }}>
+      <div className="row" style={{ justifyContent: 'flex-end', flexWrap: 'wrap', gap: 4 }}>
+        {place.documentation ? (
+          <Button variant="text" size="sm" icon={<FileText />} onClick={openDocumentation}>
+            Ver documentación
+          </Button>
+        ) : null}
         <Button
           variant="text"
           size="sm"
