@@ -1,4 +1,10 @@
-import { useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react'
+import {
+  useId,
+  type InputHTMLAttributes,
+  type ReactNode,
+  type SelectHTMLAttributes,
+  type TextareaHTMLAttributes,
+} from 'react'
 
 interface BaseProps {
   label: string
@@ -32,6 +38,36 @@ export function TextField({ label, hint, error, icon, trailing, prefix, id, disa
           {...rest}
         />
         {trailing}
+      </div>
+      {message ? (
+        <div id={hintId} className="field__hint" role={error ? 'alert' : undefined}>
+          {message}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+type TextAreaFieldProps = BaseProps & TextareaHTMLAttributes<HTMLTextAreaElement>
+
+export function TextAreaField({ label, hint, error, id, disabled, ...rest }: TextAreaFieldProps) {
+  const generated = useId()
+  const inputId = id ?? generated
+  const hintId = `${inputId}-hint`
+  const message = error ?? hint
+  return (
+    <div className={['field', error ? 'field--error' : '', disabled ? 'field--disabled' : ''].join(' ')}>
+      <label className="field__label" htmlFor={inputId}>
+        {label}
+      </label>
+      <div className="field__control field__control--area">
+        <textarea
+          id={inputId}
+          disabled={disabled}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={message ? hintId : undefined}
+          {...rest}
+        />
       </div>
       {message ? (
         <div id={hintId} className="field__hint" role={error ? 'alert' : undefined}>

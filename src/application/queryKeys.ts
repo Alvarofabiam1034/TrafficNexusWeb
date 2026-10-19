@@ -16,5 +16,10 @@ export const queryKeys = {
   map: (projectId: string) => ['project', projectId, 'map'] as const,
   mapVersions: (projectId: string) => ['project', projectId, 'map', 'versions'] as const,
   mapVersion: (projectId: string, versionId: string) => ['project', projectId, 'map', 'versions', versionId] as const,
+  workOrders: (projectId: string, state?: string) =>
+    state
+      ? (['project', projectId, 'work-orders', { state }] as const)
+      : (['project', projectId, 'work-orders'] as const),
+  workOrder: (projectId: string, workOrderId: string) => ['project', projectId, 'work-orders', workOrderId] as const,
   project: (projectId: string) => ['project', projectId] as const,
 }

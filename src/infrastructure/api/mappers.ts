@@ -15,6 +15,13 @@ import type { CrewShift, Weekday } from '@/domain/model/shift'
 import { isWeekday } from '@/domain/model/shift'
 import type { AppUser, Project, ProjectMember } from '@/domain/model/user'
 import { isAccountRole } from '@/domain/model/user'
+import type {
+  ParsedWorkOrderDraft,
+  WorkOrder,
+  WorkOrderItem,
+  WorkOrderItemInput,
+} from '@/domain/model/workOrder'
+import { isWorkOrderState } from '@/domain/model/workOrder'
 import type { ShiftDraft } from '@/domain/repository'
 import { parseIso, toIso } from '@/domain/schedule/civilDate'
 
@@ -29,12 +36,15 @@ import type {
   MapVersionDto,
   MemberDto,
   MovementDto,
+  ParsedWorkOrderDraftDto,
   PersonDto,
   ProjectDto,
   ShiftDto,
   ShiftRequestDto,
   UserDto,
   VehicleDto,
+  WorkOrderDto,
+  WorkOrderItemDto,
 } from './dto'
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '')
@@ -251,5 +261,58 @@ export function toMapImport(map: StoredMap): MapImportDto {
       width: line.width,
       points: line.points.map((point) => ({ latitude: point.latitude, longitude: point.longitude })),
     })),
+  }
+}
+
+function toWorkOrderItem(dto: WorkOrderItemDto, index: number): WorkOrderItem {
+  return {
+    id: text(dto.id),
+    externalId: text(dto.externalId),
+    priority: text(dto.priority),
+    address: text(dto.address),
+    equipment: text(dto.equipment),
+    maintenance: text(dto.maintenance),
+    position: int(dto.position) || index,
+  }
+}
+
+export function toWorkOrder(dto: WorkOrderDto): WorkOrder {
+  const state = isWorkOrderState(dto.state) ? dto.state : 'DRAFT'
+  return {
+    id: requireId(dto.id, 'una orden de trabajo'),
+    externalNumber: text(dto.externalNumber),
+    statusReported: text(dto.statusReported),
+    rawMessage: text(dto.rawMessage),
+    parsedNotes: text(dto.parsedNotes),
+    adminNotes: text(dto.adminNotes),
+    state,
+    crewId: dto.crewId ? text(dto.crewId) : null,
+    assignedAt: dto.assignedAt ? text(dto.assignedAt) : null,
+    assignedBy: dto.assignedBy ? text(dto.assignedBy) : null,
+    assignedByName: text(dto.assignedByName),
+    createdAt: text(dto.createdAt),
+    updatedAt: text(dto.updatedAt),
+    createdBy: dto.createdBy ? text(dto.createdBy) : null,
+    createdByName: text(dto.createdByName),
+    items: (dto.items ?? []).map(toWorkOrderItem),
+  }
+}
+
+export function toParsedWorkOrderDraft(dto: ParsedWorkOrderDraftDto): ParsedWorkOrderDraft {
+  return {
+    externalNumber: text(dto.externalNumber),
+    statusReported: text(dto.statusReported),
+    parsedNotes: text(dto.parsedNotes),
+    items: (dto.items ?? []).map(toWorkOrderItem),
+  }
+}
+
+export function toWorkOrderItemRequest(item: WorkOrderItemInput) {
+  return {
+    externalId: item.externalId,
+    priority: item.priority,
+    address: item.address,
+    equipment: item.equipment,
+    maintenance: item.maintenance,
   }
 }

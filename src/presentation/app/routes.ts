@@ -9,5 +9,8 @@ export const routes = {
   vehicle: (vehicleId: string) => `/vehiculos/${encodeURIComponent(vehicleId)}`,
   inventory: '/inventario',
   externals: '/externos',
+  workOrders: '/ordenes',
+  workOrderNew: '/ordenes/nueva',
+  workOrder: (workOrderId: string) => `/ordenes/${encodeURIComponent(workOrderId)}`,
   admin: '/admin',
 } as const

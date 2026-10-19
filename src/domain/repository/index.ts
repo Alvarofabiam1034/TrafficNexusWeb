@@ -11,6 +11,13 @@ import type { CatalogGroupKind, InventoryGroup, InventoryItem } from '../model/i
 import type { MapVersion, MapVersionSummary, StoredMap } from '../model/map'
 import type { CrewShift } from '../model/shift'
 import type { AccountRole, AppUser, Project, ProjectMember, Session } from '../model/user'
+import type {
+  ParsedWorkOrderDraft,
+  WorkOrder,
+  WorkOrderCreateDraft,
+  WorkOrderState,
+  WorkOrderUpdateDraft,
+} from '../model/workOrder'
 
 /**
  * Puertos del dominio. La interfaz habla con estas abstracciones;
@@ -134,4 +141,14 @@ export interface LayerPreferences {
 export interface PreferencesRepository {
   layers(): LayerPreferences
   saveLayers(prefs: LayerPreferences): void
+}
+
+/** Órdenes de trabajo (OT). Parse + borrador + asignación. */
+export interface WorkOrderRepository {
+  parse(projectId: string, rawMessage: string): Promise<ParsedWorkOrderDraft>
+  list(projectId: string, state?: WorkOrderState): Promise<WorkOrder[]>
+  get(projectId: string, workOrderId: string): Promise<WorkOrder>
+  create(projectId: string, draft: WorkOrderCreateDraft): Promise<WorkOrder>
+  update(projectId: string, workOrderId: string, draft: WorkOrderUpdateDraft): Promise<WorkOrder>
+  assign(projectId: string, workOrderId: string, crewId: string): Promise<WorkOrder>
 }

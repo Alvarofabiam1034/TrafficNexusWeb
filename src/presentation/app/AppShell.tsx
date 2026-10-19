@@ -1,4 +1,4 @@
-import { Boxes, ChevronDown, LogOut, Map, Package, ShieldCheck, Truck, Users } from 'lucide-react'
+import { Boxes, ChevronDown, ClipboardList, LogOut, Map, Package, ShieldCheck, Truck, Users } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 
@@ -11,6 +11,7 @@ import './appShell.css'
 
 const destinations = [
   { to: routes.crews, label: 'Cuadrillas', icon: Users },
+  { to: routes.workOrders, label: 'Órdenes', icon: ClipboardList },
   { to: routes.vehicles, label: 'Vehículos', icon: Truck },
   { to: routes.inventory, label: 'Inventario', icon: Package },
   { to: routes.externals, label: 'Externos', icon: Map },

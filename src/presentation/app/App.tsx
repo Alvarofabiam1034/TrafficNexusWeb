@@ -21,6 +21,9 @@ const FleetListPage = lazy(() => import('@/presentation/features/fleet/FleetList
 const VehicleKitPage = lazy(() => import('@/presentation/features/fleet/VehicleKitPage'))
 const InventoryPage = lazy(() => import('@/presentation/features/inventory/InventoryPage'))
 const ExternalsPage = lazy(() => import('@/presentation/features/externals/ExternalsPage'))
+const WorkOrderListPage = lazy(() => import('@/presentation/features/workOrders/WorkOrderListPage'))
+const WorkOrderNewPage = lazy(() => import('@/presentation/features/workOrders/WorkOrderNewPage'))
+const WorkOrderDetailPage = lazy(() => import('@/presentation/features/workOrders/WorkOrderDetailPage'))
 const AdminPage = lazy(() => import('@/presentation/features/admin/AdminPage'))
 
 function createQueryClient(): QueryClient {
@@ -63,6 +66,9 @@ export function App() {
                     <Route path="/vehiculos/:vehicleId" element={<VehicleKitPage />} />
                     <Route path={routes.inventory} element={<InventoryPage />} />
                     <Route path={routes.externals} element={<ExternalsPage />} />
+                    <Route path={routes.workOrders} element={<WorkOrderListPage />} />
+                    <Route path={routes.workOrderNew} element={<WorkOrderNewPage />} />
+                    <Route path="/ordenes/:workOrderId" element={<WorkOrderDetailPage />} />
                     <Route path={routes.admin} element={<AdminPage />} />
                   </Route>
                 </Route>

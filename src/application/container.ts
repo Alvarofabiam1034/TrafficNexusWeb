@@ -8,6 +8,7 @@ import type {
   ProjectRepository,
   SessionRepository,
   UserRepository,
+  WorkOrderRepository,
 } from '@/domain/repository'
 import {
   ApiCrewRepository,
@@ -17,6 +18,7 @@ import {
   ApiProjectRepository,
   ApiSessionRepository,
   ApiUserRepository,
+  ApiWorkOrderRepository,
 } from '@/infrastructure/api/repositories'
 import { HttpClient } from '@/infrastructure/http/httpClient'
 import { LocalPreferencesRepository } from '@/infrastructure/storage/preferencesRepository'
@@ -34,6 +36,7 @@ export interface AppContainer {
   readonly inventory: InventoryRepository
   readonly map: MapRepository
   readonly preferences: PreferencesRepository
+  readonly workOrders: WorkOrderRepository
 }
 
 /**
@@ -64,5 +67,6 @@ export function createContainer(baseUrl: string = import.meta.env.VITE_API_BASE_
     inventory: new ApiInventoryRepository(http),
     map: new ApiMapRepository(http),
     preferences: new LocalPreferencesRepository(),
+    workOrders: new ApiWorkOrderRepository(http),
   }
 }

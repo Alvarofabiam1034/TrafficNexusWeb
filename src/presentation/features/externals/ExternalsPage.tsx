@@ -1,5 +1,6 @@
-import { ExternalLink, FileText, FileUp, History, Layers, MapPin, Route, Search, X } from 'lucide-react'
+import { ClipboardList, ExternalLink, FileText, FileUp, History, Layers, MapPin, Route, Search, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { useContainer, useIsAdmin } from '@/application/ContainerContext'
 import { useImportMap, useLatestMap, useMapVersion, useMapVersions } from '@/application/hooks/useMap'
@@ -7,9 +8,11 @@ import { messageOf } from '@/domain/errors'
 import { drivePreviewUrl } from '@/domain/map/drivePreview'
 import { workfronts, type Workfront } from '@/domain/map/workfronts'
 import { EMPTY_MAP, type MapPlace, type StoredMap } from '@/domain/model/map'
+import { externalNumberFromPlaceName } from '@/domain/model/workOrder'
 import type { LayerPreferences } from '@/domain/repository'
 import { parseKmlFile } from '@/infrastructure/kml/kmlParser'
 import type { MapCameraTarget } from '@/infrastructure/maps/googleMaps'
+import { routes } from '@/presentation/app/routes'
 import { Button, IconButton } from '@/presentation/components/Button'
 import { Dialog } from '@/presentation/components/Dialog'
 import { ErrorState, InlineMessage, Loading } from '@/presentation/components/States'
@@ -335,11 +338,18 @@ function ExternalsMap({
 }
 
 function PlaceCard({ place, onClose }: { place: MapPlace; onClose: () => void }) {
+  const navigate = useNavigate()
+  const isAdmin = useIsAdmin()
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${place.latitude},${place.longitude}`
   const previewUrl = place.documentation ? drivePreviewUrl(place.documentation) : null
+  const externalNumber = externalNumberFromPlaceName(place.name)
   const openDocumentation = () => {
     const href = previewUrl ?? place.documentation
     if (href) window.open(href, '_blank', 'noopener,noreferrer')
+  }
+  const assignOt = () => {
+    const query = externalNumber ? `?external=${encodeURIComponent(externalNumber)}` : ''
+    navigate(`${routes.workOrderNew}${query}`)
   }
 
   return (
@@ -360,6 +370,11 @@ function PlaceCard({ place, onClose }: { place: MapPlace; onClose: () => void })
       </div>
       {place.description ? <p className="externals__place-text">{place.description}</p> : null}
       <div className="row" style={{ justifyContent: 'flex-end', flexWrap: 'wrap', gap: 4 }}>
+        {isAdmin ? (
+          <Button variant="text" size="sm" icon={<ClipboardList />} onClick={assignOt}>
+            Asignar OT
+          </Button>
+        ) : null}
         {place.documentation ? (
           <Button variant="text" size="sm" icon={<FileText />} onClick={openDocumentation}>
             Ver documentación

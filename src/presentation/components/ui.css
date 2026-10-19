@@ -236,6 +236,15 @@
 .field__control textarea {
   resize: vertical;
   min-height: 80px;
+  height: auto;
+  font: inherit;
+  color: inherit;
+}
+
+.field__control--area {
+  align-items: flex-start;
+  padding-top: 4px;
+  padding-bottom: 4px;
 }
 
 .field__control select {

@@ -189,3 +189,39 @@ export interface MapImportDto {
   places: Array<Omit<MapPlaceDto, 'id'>>
   lines: Array<Omit<MapLineDto, 'id'>>
 }
+
+export interface WorkOrderItemDto {
+  id?: string
+  externalId?: string
+  priority?: string
+  address?: string
+  equipment?: string
+  maintenance?: string
+  position?: number
+}
+
+export interface WorkOrderDto {
+  id?: string
+  externalNumber?: string
+  statusReported?: string
+  rawMessage?: string
+  parsedNotes?: string
+  adminNotes?: string
+  state?: string
+  crewId?: string | null
+  assignedAt?: string | null
+  assignedBy?: string | null
+  assignedByName?: string
+  createdAt?: string
+  updatedAt?: string
+  createdBy?: string | null
+  createdByName?: string
+  items?: WorkOrderItemDto[] | null
+}
+
+export interface ParsedWorkOrderDraftDto {
+  externalNumber?: string
+  statusReported?: string
+  parsedNotes?: string
+  items?: WorkOrderItemDto[] | null
+}

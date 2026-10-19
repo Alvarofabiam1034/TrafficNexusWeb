@@ -13,6 +13,13 @@ import type { MapVersion, MapVersionSummary, StoredMap } from '@/domain/model/ma
 import type { CrewShift } from '@/domain/model/shift'
 import type { AppUser, Project, ProjectMember, Session } from '@/domain/model/user'
 import type {
+  ParsedWorkOrderDraft,
+  WorkOrder,
+  WorkOrderCreateDraft,
+  WorkOrderState,
+  WorkOrderUpdateDraft,
+} from '@/domain/model/workOrder'
+import type {
   CrewDraft,
   CrewRepository,
   FleetRepository,
@@ -24,6 +31,7 @@ import type {
   UserDraft,
   UserPatch,
   UserRepository,
+  WorkOrderRepository,
 } from '@/domain/repository'
 import { normalizeEmail } from '@/domain/validation/appUserValidator'
 import { normalizePlate } from '@/domain/validation/crewValidator'
@@ -42,10 +50,12 @@ import type {
   MapVersionDto,
   MemberDto,
   MovementDto,
+  ParsedWorkOrderDraftDto,
   ProjectDto,
   ShiftDto,
   UserDto,
   VehicleDto,
+  WorkOrderDto,
 } from './dto'
 import {
   toAssignment,
@@ -59,11 +69,14 @@ import {
   toMapVersionSummary,
   toMember,
   toMovement,
+  toParsedWorkOrderDraft,
   toProject,
   toShift,
   toShiftRequest,
   toUser,
   toVehicle,
+  toWorkOrder,
+  toWorkOrderItemRequest,
 } from './mappers'
 
 const DEFAULT_PROJECT_NAME = 'TrafficNexus'
@@ -418,5 +431,58 @@ export class ApiMapRepository implements MapRepository {
 
   async version(projectId: string, versionId: string): Promise<MapVersion> {
     return toMapVersion(await this.http.get<MapVersionDto>(`${projectPath(projectId)}/map/versions/${enc(versionId)}`))
+  }
+}
+
+export class ApiWorkOrderRepository implements WorkOrderRepository {
+  constructor(private readonly http: HttpClient) {}
+
+  async parse(projectId: string, rawMessage: string): Promise<ParsedWorkOrderDraft> {
+    return toParsedWorkOrderDraft(
+      await this.http.post<ParsedWorkOrderDraftDto>(`${projectPath(projectId)}/work-orders/parse`, { rawMessage }),
+    )
+  }
+
+  async list(projectId: string, state?: WorkOrderState): Promise<WorkOrder[]> {
+    const dtos = await this.http.get<WorkOrderDto[]>(`${projectPath(projectId)}/work-orders`, {
+      state,
+    })
+    return dtos.map(toWorkOrder)
+  }
+
+  async get(projectId: string, workOrderId: string): Promise<WorkOrder> {
+    return toWorkOrder(
+      await this.http.get<WorkOrderDto>(`${projectPath(projectId)}/work-orders/${enc(workOrderId)}`),
+    )
+  }
+
+  async create(projectId: string, draft: WorkOrderCreateDraft): Promise<WorkOrder> {
+    const body: Record<string, unknown> = { rawMessage: draft.rawMessage }
+    if (draft.adminNotes !== undefined) body.adminNotes = draft.adminNotes
+    if (draft.externalNumber !== undefined) body.externalNumber = draft.externalNumber
+    if (draft.statusReported !== undefined) body.statusReported = draft.statusReported
+    if (draft.parsedNotes !== undefined) body.parsedNotes = draft.parsedNotes
+    if (draft.items !== undefined) body.items = draft.items.map(toWorkOrderItemRequest)
+    return toWorkOrder(await this.http.post<WorkOrderDto>(`${projectPath(projectId)}/work-orders`, body))
+  }
+
+  async update(projectId: string, workOrderId: string, draft: WorkOrderUpdateDraft): Promise<WorkOrder> {
+    return toWorkOrder(
+      await this.http.put<WorkOrderDto>(`${projectPath(projectId)}/work-orders/${enc(workOrderId)}`, {
+        externalNumber: draft.externalNumber,
+        statusReported: draft.statusReported,
+        parsedNotes: draft.parsedNotes,
+        adminNotes: draft.adminNotes,
+        items: draft.items.map(toWorkOrderItemRequest),
+      }),
+    )
+  }
+
+  async assign(projectId: string, workOrderId: string, crewId: string): Promise<WorkOrder> {
+    return toWorkOrder(
+      await this.http.post<WorkOrderDto>(`${projectPath(projectId)}/work-orders/${enc(workOrderId)}/assignment`, {
+        crewId,
+      }),
+    )
   }
 }
