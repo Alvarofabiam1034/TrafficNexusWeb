@@ -82,6 +82,12 @@ src/
 - Las reglas (relevo de placas, cantidades, duplicados) se validan en cliente **y** las aplica el backend.
 - Interfaz en español, tema oscuro con los colores y logos de la marca.
 
+## Documentación
+
+| Doc | Contenido |
+| --- | --- |
+| [`docs/evidencias-orden-trabajo.md`](docs/evidencias-orden-trabajo.md) | Cómo listar y mostrar fotos de evidencia de una OT (`readUrl` firmada, `caption`, refresh) |
+
 ## Pruebas
 
 ```bash
