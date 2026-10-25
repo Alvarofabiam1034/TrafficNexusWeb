@@ -11,6 +11,7 @@ import type { CatalogGroupKind, InventoryGroup, InventoryItem } from '../model/i
 import type { MapVersion, MapVersionSummary, StoredMap } from '../model/map'
 import type { CrewShift } from '../model/shift'
 import type { AccountRole, AppUser, Project, ProjectMember, Session } from '../model/user'
+import type { EvidencePhoto, EvidenceStatus } from '../model/evidence'
 import type {
   ParsedWorkOrderDraft,
   WorkOrder,
@@ -151,4 +152,15 @@ export interface WorkOrderRepository {
   create(projectId: string, draft: WorkOrderCreateDraft): Promise<WorkOrder>
   update(projectId: string, workOrderId: string, draft: WorkOrderUpdateDraft): Promise<WorkOrder>
   assign(projectId: string, workOrderId: string, crewId: string): Promise<WorkOrder>
+}
+
+/** Evidencias fotográficas de una OT (lectura + nota; upload es Android). */
+export interface EvidenceRepository {
+  listByWorkOrder(
+    projectId: string,
+    workOrderId: string,
+    status?: EvidenceStatus,
+  ): Promise<EvidencePhoto[]>
+  get(projectId: string, evidenceId: string): Promise<EvidencePhoto>
+  updateCaption(projectId: string, evidenceId: string, caption: string): Promise<EvidencePhoto>
 }

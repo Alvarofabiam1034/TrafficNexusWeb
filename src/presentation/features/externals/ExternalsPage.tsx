@@ -348,8 +348,12 @@ function PlaceCard({ place, onClose }: { place: MapPlace; onClose: () => void })
     if (href) window.open(href, '_blank', 'noopener,noreferrer')
   }
   const assignOt = () => {
-    const query = externalNumber ? `?external=${encodeURIComponent(externalNumber)}` : ''
-    navigate(`${routes.workOrderNew}${query}`)
+    const params = new URLSearchParams({ placeId: place.id })
+    if (externalNumber) params.set('external', externalNumber)
+    if (place.name.trim()) params.set('placeName', place.name.trim())
+    params.set('lat', String(place.latitude))
+    params.set('lng', String(place.longitude))
+    navigate(`${routes.workOrderNew}?${params.toString()}`)
   }
 
   return (

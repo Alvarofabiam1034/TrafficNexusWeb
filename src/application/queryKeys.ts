@@ -21,5 +21,8 @@ export const queryKeys = {
       ? (['project', projectId, 'work-orders', { state }] as const)
       : (['project', projectId, 'work-orders'] as const),
   workOrder: (projectId: string, workOrderId: string) => ['project', projectId, 'work-orders', workOrderId] as const,
+  evidences: (projectId: string, workOrderId: string) =>
+    ['project', projectId, 'work-orders', workOrderId, 'evidences'] as const,
+  evidence: (projectId: string, evidenceId: string) => ['project', projectId, 'evidences', evidenceId] as const,
   project: (projectId: string) => ['project', projectId] as const,
 }

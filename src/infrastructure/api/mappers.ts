@@ -15,11 +15,14 @@ import type { CrewShift, Weekday } from '@/domain/model/shift'
 import { isWeekday } from '@/domain/model/shift'
 import type { AppUser, Project, ProjectMember } from '@/domain/model/user'
 import { isAccountRole } from '@/domain/model/user'
+import type { EvidencePhoto } from '@/domain/model/evidence'
+import { isEvidenceStatus } from '@/domain/model/evidence'
 import type {
   ParsedWorkOrderDraft,
   WorkOrder,
   WorkOrderItem,
   WorkOrderItemInput,
+  WorkOrderPlace,
 } from '@/domain/model/workOrder'
 import { isWorkOrderState } from '@/domain/model/workOrder'
 import type { ShiftDraft } from '@/domain/repository'
@@ -43,8 +46,10 @@ import type {
   ShiftRequestDto,
   UserDto,
   VehicleDto,
+  EvidencePhotoDto,
   WorkOrderDto,
   WorkOrderItemDto,
+  WorkOrderPlaceDto,
 } from './dto'
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '')
@@ -276,6 +281,19 @@ function toWorkOrderItem(dto: WorkOrderItemDto, index: number): WorkOrderItem {
   }
 }
 
+function toWorkOrderPlace(dto: WorkOrderPlaceDto | null | undefined): WorkOrderPlace | null {
+  if (!dto) return null
+  const id = text(dto.id)
+  if (!id) return null
+  return {
+    id,
+    name: text(dto.name),
+    latitude: num(dto.latitude),
+    longitude: num(dto.longitude),
+    documentation: text(dto.documentation),
+  }
+}
+
 export function toWorkOrder(dto: WorkOrderDto): WorkOrder {
   const state = isWorkOrderState(dto.state) ? dto.state : 'DRAFT'
   return {
@@ -294,6 +312,7 @@ export function toWorkOrder(dto: WorkOrderDto): WorkOrder {
     updatedAt: text(dto.updatedAt),
     createdBy: dto.createdBy ? text(dto.createdBy) : null,
     createdByName: text(dto.createdByName),
+    place: toWorkOrderPlace(dto.place),
     items: (dto.items ?? []).map(toWorkOrderItem),
   }
 }
@@ -314,5 +333,23 @@ export function toWorkOrderItemRequest(item: WorkOrderItemInput) {
     address: item.address,
     equipment: item.equipment,
     maintenance: item.maintenance,
+  }
+}
+
+export function toEvidencePhoto(dto: EvidencePhotoDto): EvidencePhoto {
+  return {
+    id: requireId(dto.id, 'una evidencia'),
+    photoCode: text(dto.photoCode),
+    status: isEvidenceStatus(dto.status) ? dto.status : 'READY',
+    capturedAt: text(dto.capturedAt),
+    serverReceivedAt: text(dto.serverReceivedAt),
+    addressText: text(dto.addressText),
+    externalNumber: text(dto.externalNumber),
+    directionText: text(dto.directionText),
+    caption: text(dto.caption),
+    createdByName: text(dto.createdByName),
+    byteSize: int(dto.byteSize),
+    readUrl: text(dto.readUrl),
+    readUrlExpiresAt: text(dto.readUrlExpiresAt),
   }
 }

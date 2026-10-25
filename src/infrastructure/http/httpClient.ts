@@ -7,7 +7,7 @@ export interface TokenProvider {
 }
 
 interface RequestOptions {
-  readonly method: 'GET' | 'POST' | 'PUT' | 'DELETE'
+  readonly method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   readonly path: string
   readonly body?: unknown
   readonly query?: Record<string, string | undefined>
@@ -46,6 +46,10 @@ export class HttpClient {
 
   put<T>(path: string, body?: unknown): Promise<T> {
     return this.request<T>({ method: 'PUT', path, body })
+  }
+
+  patch<T>(path: string, body?: unknown): Promise<T> {
+    return this.request<T>({ method: 'PATCH', path, body })
   }
 
   delete<T = void>(path: string): Promise<T> {

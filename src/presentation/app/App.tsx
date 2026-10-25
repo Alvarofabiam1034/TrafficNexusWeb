@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { lazy, Suspense, useMemo } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 
 import { ContainerProvider } from '@/application/ContainerContext'
-import { createContainer } from '@/application/container'
+import { createContainer, type AppContainer } from '@/application/container'
 import { DomainError } from '@/domain/errors'
 import { Loading } from '@/presentation/components/States'
 import { ToastProvider } from '@/presentation/components/Toast'
@@ -43,8 +43,19 @@ function createQueryClient(): QueryClient {
   })
 }
 
+/** Evita que el HMR de Vite deje un container viejo sin repos nuevos (p. ej. evidences). */
+function useAppContainer(): AppContainer {
+  const [container, setContainer] = useState(createContainer)
+  if (!container.evidences) {
+    const next = createContainer()
+    setContainer(next)
+    return next
+  }
+  return container
+}
+
 export function App() {
-  const container = useMemo(() => createContainer(), [])
+  const container = useAppContainer()
   const queryClient = useMemo(() => createQueryClient(), [])
 
   return (

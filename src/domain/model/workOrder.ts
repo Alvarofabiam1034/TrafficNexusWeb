@@ -18,8 +18,17 @@ export interface WorkOrderItem {
   readonly position: number
 }
 
+/** Snapshot del punto del mapa anclado a la OT (coords/doc del mapa vigente al crear/reanclar). */
+export interface WorkOrderPlace {
+  readonly id: string
+  readonly name: string
+  readonly latitude: number
+  readonly longitude: number
+  readonly documentation: string
+}
+
 /**
- * Orden de trabajo: incidente sobre un externo, con ítems y asignación a cuadrilla.
+ * Orden de trabajo: incidente sobre un externo del mapa, con ítems y asignación a cuadrilla.
  */
 export interface WorkOrder {
   readonly id: string
@@ -37,6 +46,8 @@ export interface WorkOrder {
   readonly updatedAt: string
   readonly createdBy: string | null
   readonly createdByName: string
+  /** Null en OTs antiguas creadas antes del anclaje al mapa. */
+  readonly place: WorkOrderPlace | null
   readonly items: readonly WorkOrderItem[]
 }
 
@@ -58,6 +69,8 @@ export interface WorkOrderItemInput {
 }
 
 export interface WorkOrderCreateDraft {
+  /** Place del mapa vigente; obligatorio en el API. */
+  readonly placeId: string
   readonly rawMessage: string
   readonly adminNotes?: string
   readonly externalNumber?: string
@@ -72,6 +85,8 @@ export interface WorkOrderUpdateDraft {
   readonly parsedNotes: string
   readonly adminNotes: string
   readonly items: readonly WorkOrderItemInput[]
+  /** Si se envía, revalida el mapa vigente y refresca el snapshot de place. */
+  readonly placeId?: string
 }
 
 const PRIORITY_RANK: Record<string, number> = {

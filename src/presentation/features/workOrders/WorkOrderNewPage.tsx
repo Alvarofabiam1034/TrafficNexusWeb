@@ -1,4 +1,4 @@
-import { ClipboardPaste, Plus, Trash2 } from 'lucide-react'
+import { ClipboardPaste, ExternalLink, MapPin, Plus, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 
@@ -30,17 +30,34 @@ const emptyItem = (): WorkOrderItemInput => ({
   maintenance: '',
 })
 
-export default function WorkOrderNewPage() {
-  const isAdmin = useIsAdmin()
-  if (!isAdmin) return <Navigate to={routes.workOrders} replace />
-  return <WorkOrderNewForm />
+function parseCoord(value: string | null): number | null {
+  if (!value) return null
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
 }
 
-function WorkOrderNewForm() {
+export default function WorkOrderNewPage() {
+  const isAdmin = useIsAdmin()
+  const [params] = useSearchParams()
+  const placeId = params.get('placeId')?.trim() ?? ''
+
+  if (!isAdmin) return <Navigate to={routes.workOrders} replace />
+  if (!placeId) return <Navigate to={routes.externals} replace />
+  return <WorkOrderNewForm placeId={placeId} />
+}
+
+function WorkOrderNewForm({ placeId }: { placeId: string }) {
   const navigate = useNavigate()
   const toast = useToast()
   const [params] = useSearchParams()
   const presetExternal = params.get('external')?.trim() ?? ''
+  const placeName = params.get('placeName')?.trim() ?? ''
+  const latitude = parseCoord(params.get('lat'))
+  const longitude = parseCoord(params.get('lng'))
+  const mapsUrl =
+    latitude !== null && longitude !== null
+      ? `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
+      : null
 
   const crews = useCrews()
   const parse = useParseWorkOrder()
@@ -112,6 +129,7 @@ function WorkOrderNewForm() {
       return workOrderId
     }
     const created = await create.mutateAsync({
+      placeId,
       rawMessage: rawMessage.trim() || `Externo ${fields.externalNumber}`,
       ...fields,
     })
@@ -149,13 +167,43 @@ function WorkOrderNewForm() {
       <PageHeader
         title="Nueva orden"
         subtitle={
-          presetExternal
-            ? `Externo ${presetExternal} · pega el reporte y asigna cuadrilla`
-            : 'Pega el reporte de WhatsApp y asígnalo'
+          placeName
+            ? `${placeName} · pega el reporte y asigna cuadrilla`
+            : presetExternal
+              ? `Externo ${presetExternal} · pega el reporte y asigna cuadrilla`
+              : 'Pega el reporte de WhatsApp y asígnalo'
         }
-        backTo={routes.workOrders}
+        backTo={routes.externals}
       />
       <div className="page-body">
+        <div className="ot-place-banner">
+          <span className="icon-badge icon-badge--hi">
+            <MapPin size={18} />
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="ot-place-banner__title">{placeName || 'Punto del mapa'}</div>
+            {latitude !== null && longitude !== null ? (
+              <div className="mono muted" style={{ fontSize: '0.75rem' }}>
+                {latitude.toFixed(6)}, {longitude.toFixed(6)}
+              </div>
+            ) : (
+              <div className="muted" style={{ fontSize: '0.75rem' }}>
+                Anclada al place del mapa vigente
+              </div>
+            )}
+          </div>
+          {mapsUrl ? (
+            <Button
+              variant="text"
+              size="sm"
+              icon={<ExternalLink />}
+              onClick={() => window.open(mapsUrl, '_blank', 'noopener,noreferrer')}
+            >
+              Maps
+            </Button>
+          ) : null}
+        </div>
+
         {crews.isPending ? <Loading /> : null}
         {crews.data && crews.data.length === 0 ? (
           <EmptyState
@@ -306,7 +354,7 @@ function WorkOrderNewForm() {
                 ) : null}
 
                 <div className="ot-form__actions">
-                  <Button variant="text" onClick={() => navigate(routes.workOrders)} disabled={busy}>
+                  <Button variant="text" onClick={() => navigate(routes.externals)} disabled={busy}>
                     Cancelar
                   </Button>
                   <Button variant="outlined" onClick={() => void saveDraft()} disabled={busy}>

@@ -200,6 +200,14 @@ export interface WorkOrderItemDto {
   position?: number
 }
 
+export interface WorkOrderPlaceDto {
+  id?: string
+  name?: string
+  latitude?: number
+  longitude?: number
+  documentation?: string
+}
+
 export interface WorkOrderDto {
   id?: string
   externalNumber?: string
@@ -216,6 +224,7 @@ export interface WorkOrderDto {
   updatedAt?: string
   createdBy?: string | null
   createdByName?: string
+  place?: WorkOrderPlaceDto | null
   items?: WorkOrderItemDto[] | null
 }
 
@@ -224,4 +233,20 @@ export interface ParsedWorkOrderDraftDto {
   statusReported?: string
   parsedNotes?: string
   items?: WorkOrderItemDto[] | null
+}
+
+export interface EvidencePhotoDto {
+  id?: string
+  photoCode?: string
+  status?: string
+  capturedAt?: string
+  serverReceivedAt?: string
+  addressText?: string
+  externalNumber?: string
+  directionText?: string
+  caption?: string
+  createdByName?: string
+  byteSize?: number
+  readUrl?: string
+  readUrlExpiresAt?: string
 }

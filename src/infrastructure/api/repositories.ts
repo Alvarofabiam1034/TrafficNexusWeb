@@ -12,6 +12,7 @@ import type { CatalogGroupKind, InventoryGroup, InventoryItem } from '@/domain/m
 import type { MapVersion, MapVersionSummary, StoredMap } from '@/domain/model/map'
 import type { CrewShift } from '@/domain/model/shift'
 import type { AppUser, Project, ProjectMember, Session } from '@/domain/model/user'
+import type { EvidencePhoto, EvidenceStatus } from '@/domain/model/evidence'
 import type {
   ParsedWorkOrderDraft,
   WorkOrder,
@@ -22,6 +23,7 @@ import type {
 import type {
   CrewDraft,
   CrewRepository,
+  EvidenceRepository,
   FleetRepository,
   InventoryRepository,
   MapRepository,
@@ -50,6 +52,7 @@ import type {
   MapVersionDto,
   MemberDto,
   MovementDto,
+  EvidencePhotoDto,
   ParsedWorkOrderDraftDto,
   ProjectDto,
   ShiftDto,
@@ -61,6 +64,7 @@ import {
   toAssignment,
   toCheck,
   toCrew,
+  toEvidencePhoto,
   toInventoryGroup,
   toKit,
   toLine,
@@ -457,7 +461,10 @@ export class ApiWorkOrderRepository implements WorkOrderRepository {
   }
 
   async create(projectId: string, draft: WorkOrderCreateDraft): Promise<WorkOrder> {
-    const body: Record<string, unknown> = { rawMessage: draft.rawMessage }
+    const body: Record<string, unknown> = {
+      placeId: draft.placeId,
+      rawMessage: draft.rawMessage,
+    }
     if (draft.adminNotes !== undefined) body.adminNotes = draft.adminNotes
     if (draft.externalNumber !== undefined) body.externalNumber = draft.externalNumber
     if (draft.statusReported !== undefined) body.statusReported = draft.statusReported
@@ -467,21 +474,51 @@ export class ApiWorkOrderRepository implements WorkOrderRepository {
   }
 
   async update(projectId: string, workOrderId: string, draft: WorkOrderUpdateDraft): Promise<WorkOrder> {
-    return toWorkOrder(
-      await this.http.put<WorkOrderDto>(`${projectPath(projectId)}/work-orders/${enc(workOrderId)}`, {
-        externalNumber: draft.externalNumber,
-        statusReported: draft.statusReported,
-        parsedNotes: draft.parsedNotes,
-        adminNotes: draft.adminNotes,
-        items: draft.items.map(toWorkOrderItemRequest),
-      }),
-    )
+    const body: Record<string, unknown> = {
+      externalNumber: draft.externalNumber,
+      statusReported: draft.statusReported,
+      parsedNotes: draft.parsedNotes,
+      adminNotes: draft.adminNotes,
+      items: draft.items.map(toWorkOrderItemRequest),
+    }
+    if (draft.placeId !== undefined) body.placeId = draft.placeId
+    return toWorkOrder(await this.http.put<WorkOrderDto>(`${projectPath(projectId)}/work-orders/${enc(workOrderId)}`, body))
   }
 
   async assign(projectId: string, workOrderId: string, crewId: string): Promise<WorkOrder> {
     return toWorkOrder(
       await this.http.post<WorkOrderDto>(`${projectPath(projectId)}/work-orders/${enc(workOrderId)}/assignment`, {
         crewId,
+      }),
+    )
+  }
+}
+
+export class ApiEvidenceRepository implements EvidenceRepository {
+  constructor(private readonly http: HttpClient) {}
+
+  async listByWorkOrder(
+    projectId: string,
+    workOrderId: string,
+    status?: EvidenceStatus,
+  ): Promise<EvidencePhoto[]> {
+    const dtos = await this.http.get<EvidencePhotoDto[]>(
+      `${projectPath(projectId)}/work-orders/${enc(workOrderId)}/evidences`,
+      { status },
+    )
+    return dtos.map(toEvidencePhoto)
+  }
+
+  async get(projectId: string, evidenceId: string): Promise<EvidencePhoto> {
+    return toEvidencePhoto(
+      await this.http.get<EvidencePhotoDto>(`${projectPath(projectId)}/evidences/${enc(evidenceId)}`),
+    )
+  }
+
+  async updateCaption(projectId: string, evidenceId: string, caption: string): Promise<EvidencePhoto> {
+    return toEvidencePhoto(
+      await this.http.patch<EvidencePhotoDto>(`${projectPath(projectId)}/evidences/${enc(evidenceId)}`, {
+        caption,
       }),
     )
   }

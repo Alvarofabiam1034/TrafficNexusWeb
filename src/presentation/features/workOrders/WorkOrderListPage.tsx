@@ -1,4 +1,4 @@
-import { ClipboardList, Plus, Users } from 'lucide-react'
+import { ClipboardList, MapPin, Users } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -68,12 +68,12 @@ export default function WorkOrderListPage() {
             body={
               filter === 'ASSIGNED'
                 ? 'Cuando asignes una OT a una cuadrilla aparecerá aquí.'
-                : 'Busca el externo en el mapa o crea una orden pegando el WhatsApp.'
+                : 'Abre un punto en Externos y pulsa Asignar OT para crear una orden anclada al mapa.'
             }
             action={
               isAdmin ? (
-                <Button variant="outlined" icon={<Plus />} onClick={() => navigate(routes.workOrderNew)}>
-                  Nueva orden
+                <Button variant="outlined" icon={<MapPin />} onClick={() => navigate(routes.externals)}>
+                  Ir a Externos
                 </Button>
               ) : undefined
             }
@@ -97,12 +97,6 @@ export default function WorkOrderListPage() {
           </>
         ) : null}
       </div>
-
-      {isAdmin && orders.data ? (
-        <button type="button" className="fab" onClick={() => navigate(routes.workOrderNew)}>
-          <Plus size={20} /> Nueva orden
-        </button>
-      ) : null}
     </>
   )
 }
@@ -118,6 +112,7 @@ function WorkOrderCard({
 }) {
   const priority = maxPriority(order.items)
   const when = order.assignedAt ?? order.createdAt
+  const placeLabel = order.place?.name?.trim() || null
   return (
     <button type="button" className="ot-card" onClick={onOpen}>
       <div className="ot-card__head">
@@ -138,6 +133,7 @@ function WorkOrderCard({
           </span>
           {order.statusReported ? <span className="ot-chip ot-chip--status">{order.statusReported}</span> : null}
           {priority ? <span className="ot-chip ot-chip--priority">{priority}</span> : null}
+          {!order.place ? <span className="ot-chip ot-chip--draft">Sin ubicación</span> : null}
         </div>
       </div>
       <div className="ot-card__meta">
@@ -149,6 +145,12 @@ function WorkOrderCard({
           {order.state === 'ASSIGNED' ? `por ${order.assignedByName || '—'}` : `creada por ${order.createdByName || '—'}`}
         </span>
       </div>
+      {placeLabel ? (
+        <div className="ot-card__place">
+          <MapPin size={14} />
+          <span className="ot-card__place-text">{placeLabel}</span>
+        </div>
+      ) : null}
     </button>
   )
 }

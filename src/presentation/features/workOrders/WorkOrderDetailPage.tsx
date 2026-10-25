@@ -1,4 +1,4 @@
-import { Users } from 'lucide-react'
+import { ExternalLink, FileText, MapPin, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
@@ -6,7 +6,8 @@ import { useIsAdmin } from '@/application/ContainerContext'
 import { useCrews } from '@/application/hooks/useCrews'
 import { useAssignWorkOrder, useUpdateWorkOrder, useWorkOrder } from '@/application/hooks/useWorkOrders'
 import { messageOf } from '@/domain/errors'
-import { maxPriority, type WorkOrderItemInput } from '@/domain/model/workOrder'
+import { drivePreviewUrl } from '@/domain/map/drivePreview'
+import { maxPriority, type WorkOrderItemInput, type WorkOrderPlace } from '@/domain/model/workOrder'
 import { formatPlate } from '@/domain/validation/crewValidator'
 import { routes } from '@/presentation/app/routes'
 import { Button } from '@/presentation/components/Button'
@@ -16,6 +17,7 @@ import { ErrorState, InlineMessage, Loading } from '@/presentation/components/St
 import { useToast } from '@/presentation/components/Toast'
 import { formatDateTime } from '@/presentation/i18n/labels'
 
+import { WorkOrderEvidences } from './WorkOrderEvidences'
 import './workOrders.css'
 
 export default function WorkOrderDetailPage() {
@@ -144,6 +146,7 @@ export default function WorkOrderDetailPage() {
       />
       <div className="page-body">
         <div className="ot-detail">
+          <WorkOrderPlaceBlock place={data.place} />
           {canEdit ? (
             <div className="ot-form">
               <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
@@ -361,8 +364,64 @@ export default function WorkOrderDetailPage() {
               <pre className="ot-detail__raw">{data.rawMessage}</pre>
             </div>
           ) : null}
+
+          <WorkOrderEvidences
+            workOrderId={data.id}
+            externalNumber={data.externalNumber}
+            canEditCaption={isAdmin}
+          />
         </div>
       </div>
     </>
+  )
+}
+
+function WorkOrderPlaceBlock({ place }: { place: WorkOrderPlace | null }) {
+  if (!place) {
+    return (
+      <div className="ot-detail__block">
+        <h2>Ubicación</h2>
+        <p className="ot-detail__text muted">Sin ubicación (OT anterior al anclaje al mapa)</p>
+      </div>
+    )
+  }
+
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${place.latitude},${place.longitude}`
+  const previewUrl = place.documentation ? drivePreviewUrl(place.documentation) : null
+  const openDocumentation = () => {
+    const href = previewUrl ?? place.documentation
+    if (href) window.open(href, '_blank', 'noopener,noreferrer')
+  }
+
+  return (
+    <div className="ot-detail__block">
+      <h2>Ubicación</h2>
+      <div className="ot-place-banner">
+        <span className="icon-badge icon-badge--hi">
+          <MapPin size={18} />
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="ot-place-banner__title">{place.name || 'Punto del mapa'}</div>
+          <div className="mono muted" style={{ fontSize: '0.75rem' }}>
+            {place.latitude.toFixed(6)}, {place.longitude.toFixed(6)}
+          </div>
+        </div>
+        <div className="row" style={{ flexWrap: 'wrap', gap: 4, justifyContent: 'flex-end' }}>
+          {place.documentation ? (
+            <Button variant="text" size="sm" icon={<FileText />} onClick={openDocumentation}>
+              Docs
+            </Button>
+          ) : null}
+          <Button
+            variant="text"
+            size="sm"
+            icon={<ExternalLink />}
+            onClick={() => window.open(mapsUrl, '_blank', 'noopener,noreferrer')}
+          >
+            Maps
+          </Button>
+        </div>
+      </div>
+    </div>
   )
 }
