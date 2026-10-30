@@ -1,4 +1,4 @@
-import type { CatalogGroupKind } from './inventory'
+import type { CatalogGroupKind, InventoryUnit } from './inventory'
 
 export interface Vehicle {
   readonly id: string
@@ -11,7 +11,11 @@ export interface KitLine {
   readonly id: string
   readonly itemId: string
   readonly itemName: string
+  readonly unit: InventoryUnit
   readonly quantity: number
+  /** Solo herramientas; vacío en consumibles. */
+  readonly brand: string
+  readonly serial: string
 }
 
 /** Caja de una placa para un grupo del catálogo. */

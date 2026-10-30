@@ -62,8 +62,9 @@ export default function FleetListPage() {
       toast.success('Vehículo eliminado')
     } catch (error) {
       if (error instanceof KitQuantityBlockedError) setBlocked(vehicle)
-      else if (DomainError.is(error, 'CONFLICT')) toast.error('La placa está asignada a una cuadrilla')
-      else toast.error(messageOf(error, 'No se pudo eliminar'))
+      else if (DomainError.is(error, 'CONFLICT')) {
+        toast.error(messageOf(error, 'No se puede eliminar el vehículo'))
+      } else toast.error(messageOf(error, 'No se pudo eliminar'))
     }
   }
 

@@ -2,7 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { KitQuantityBlockedError } from '@/domain/errors'
 import { deletionBlocked } from '@/domain/kit/kitRules'
-import type { CatalogGroupKind } from '@/domain/model/inventory'
+import type { CatalogGroupKind, InventoryUnit } from '@/domain/model/inventory'
+import type { InventoryItemPatch } from '@/domain/repository'
 
 import { useContainer, useRequiredSession } from '../ContainerContext'
 import { queryKeys } from '../queryKeys'
@@ -21,7 +22,7 @@ function useInvalidateInventory() {
   const { projectId } = useRequiredSession()
   return async () => {
     await client.invalidateQueries({ queryKey: queryKeys.inventory(projectId) })
-    // Las cajas muestran nombres del catálogo.
+    // Las cajas muestran nombres y unidades del catálogo.
     await client.invalidateQueries({ queryKey: queryKeys.vehicles(projectId) })
   }
 }
@@ -31,18 +32,28 @@ export function useCreateItem() {
   const { projectId } = useRequiredSession()
   const invalidate = useInvalidateInventory()
   return useMutation({
-    mutationFn: ({ name, groupName, kind }: { name: string; groupName: string; kind: CatalogGroupKind | null }) =>
-      inventory.createItem(projectId, name, groupName, kind),
+    mutationFn: ({
+      name,
+      groupName,
+      kind,
+      unit,
+    }: {
+      name: string
+      groupName: string
+      kind: CatalogGroupKind | null
+      unit: InventoryUnit
+    }) => inventory.createItem(projectId, name, groupName, kind, unit),
     onSuccess: invalidate,
   })
 }
 
-export function useRenameItem() {
+export function useUpdateItem() {
   const { inventory } = useContainer()
   const { projectId } = useRequiredSession()
   const invalidate = useInvalidateInventory()
   return useMutation({
-    mutationFn: ({ itemId, name }: { itemId: string; name: string }) => inventory.renameItem(projectId, itemId, name),
+    mutationFn: ({ itemId, patch }: { itemId: string; patch: InventoryItemPatch }) =>
+      inventory.updateItem(projectId, itemId, patch),
     onSuccess: invalidate,
   })
 }

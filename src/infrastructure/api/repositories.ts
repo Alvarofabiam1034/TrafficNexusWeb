@@ -8,7 +8,7 @@ import type {
   Vehicle,
   VehicleKit,
 } from '@/domain/model/fleet'
-import type { CatalogGroupKind, InventoryGroup, InventoryItem } from '@/domain/model/inventory'
+import type { CatalogGroupKind, InventoryGroup, InventoryItem, InventoryUnit } from '@/domain/model/inventory'
 import type { MapVersion, MapVersionSummary, StoredMap } from '@/domain/model/map'
 import type { CrewShift } from '@/domain/model/shift'
 import type { AppUser, Project, ProjectMember, Session } from '@/domain/model/user'
@@ -25,6 +25,7 @@ import type {
   CrewRepository,
   EvidenceRepository,
   FleetRepository,
+  InventoryItemPatch,
   InventoryRepository,
   MapRepository,
   ProjectRepository,
@@ -66,6 +67,7 @@ import {
   toCrew,
   toEvidencePhoto,
   toInventoryGroup,
+  toInventoryItem,
   toKit,
   toLine,
   toMapImport,
@@ -321,6 +323,12 @@ export class ApiFleetRepository implements FleetRepository {
     return toLine(await this.http.put<LineDto>(`${projectPath(projectId)}/kit-lines/${enc(lineId)}`, { quantity }))
   }
 
+  async setLineIdentity(projectId: string, lineId: string, brand: string, serial: string): Promise<KitLine> {
+    return toLine(
+      await this.http.put<LineDto>(`${projectPath(projectId)}/kit-lines/${enc(lineId)}/identity`, { brand, serial }),
+    )
+  }
+
   async consume(projectId: string, lineId: string, quantity: number): Promise<KitLine> {
     return toLine(
       await this.http.post<LineDto>(`${projectPath(projectId)}/kit-lines/${enc(lineId)}/consumptions`, { quantity }),
@@ -369,20 +377,20 @@ export class ApiInventoryRepository implements InventoryRepository {
     name: string,
     groupName: string,
     kind: CatalogGroupKind | null,
+    unit: InventoryUnit,
   ): Promise<InventoryItem> {
-    const dto = await this.http.post<InventoryItemDto>(`${projectPath(projectId)}/inventory/items`, {
-      name,
-      groupName,
-      kind,
-    })
-    return { id: dto.id ?? '', name: dto.name ?? name, sortIndex: dto.sortIndex ?? 0 }
+    const body: Record<string, unknown> = { name, groupName, unit }
+    if (kind !== null) body.kind = kind
+    return toInventoryItem(await this.http.post<InventoryItemDto>(`${projectPath(projectId)}/inventory/items`, body))
   }
 
-  async renameItem(projectId: string, itemId: string, name: string): Promise<InventoryItem> {
-    const dto = await this.http.put<InventoryItemDto>(`${projectPath(projectId)}/inventory/items/${enc(itemId)}`, {
-      name,
-    })
-    return { id: dto.id ?? itemId, name: dto.name ?? name, sortIndex: dto.sortIndex ?? 0 }
+  async updateItem(projectId: string, itemId: string, patch: InventoryItemPatch): Promise<InventoryItem> {
+    const body: Record<string, unknown> = {}
+    if (patch.name !== undefined) body.name = patch.name
+    if (patch.unit !== undefined) body.unit = patch.unit
+    return toInventoryItem(
+      await this.http.put<InventoryItemDto>(`${projectPath(projectId)}/inventory/items/${enc(itemId)}`, body),
+    )
   }
 
   async moveItem(projectId: string, itemId: string, delta: -1 | 1): Promise<void> {

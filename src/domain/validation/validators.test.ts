@@ -41,7 +41,7 @@ describe('inventoryValidator', () => {
       name: 'Ópticas',
       kind: 'CONSUMABLE',
       sortIndex: 0,
-      items: [{ id: 'i1', name: 'Lente rojo 200', sortIndex: 0 }],
+      items: [{ id: 'i1', name: 'Lente rojo 200', unit: 'UNITS', sortIndex: 0 }],
     },
   ]
 

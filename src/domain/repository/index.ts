@@ -7,7 +7,7 @@ import type {
   VehicleKit,
   KitLine,
 } from '../model/fleet'
-import type { CatalogGroupKind, InventoryGroup, InventoryItem } from '../model/inventory'
+import type { CatalogGroupKind, InventoryGroup, InventoryItem, InventoryUnit } from '../model/inventory'
 import type { MapVersion, MapVersionSummary, StoredMap } from '../model/map'
 import type { CrewShift } from '../model/shift'
 import type { AccountRole, AppUser, Project, ProjectMember, Session } from '../model/user'
@@ -98,12 +98,18 @@ export interface FleetRepository {
   removeKit(projectId: string, vehicleId: string, kitId: string): Promise<void>
   reassignKit(projectId: string, kitId: string, vehicleId: string): Promise<VehicleKit>
   adjustLine(projectId: string, lineId: string, quantity: number): Promise<KitLine>
+  setLineIdentity(projectId: string, lineId: string, brand: string, serial: string): Promise<KitLine>
   consume(projectId: string, lineId: string, quantity: number): Promise<KitLine>
   check(projectId: string, lineId: string): Promise<ToolCheck>
   movements(projectId: string, vehicleId: string): Promise<StockMovement[]>
   toolChecks(projectId: string, vehicleId: string): Promise<ToolCheck[]>
   vehicleAssignments(projectId: string, vehicleId: string): Promise<KitAssignment[]>
   groupAssignments(projectId: string, groupId: string): Promise<KitAssignment[]>
+}
+
+export interface InventoryItemPatch {
+  readonly name?: string
+  readonly unit?: InventoryUnit
 }
 
 export interface InventoryRepository {
@@ -113,8 +119,9 @@ export interface InventoryRepository {
     name: string,
     groupName: string,
     kind: CatalogGroupKind | null,
+    unit: InventoryUnit,
   ): Promise<InventoryItem>
-  renameItem(projectId: string, itemId: string, name: string): Promise<InventoryItem>
+  updateItem(projectId: string, itemId: string, patch: InventoryItemPatch): Promise<InventoryItem>
   moveItem(projectId: string, itemId: string, delta: -1 | 1): Promise<void>
   removeItem(projectId: string, itemId: string): Promise<void>
   updateGroup(

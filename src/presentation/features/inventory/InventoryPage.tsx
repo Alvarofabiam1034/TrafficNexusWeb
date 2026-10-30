@@ -24,11 +24,19 @@ import {
   useInventory,
   useMoveGroup,
   useMoveItem,
-  useRenameItem,
   useUpdateGroup,
+  useUpdateItem,
 } from '@/application/hooks/useInventory'
 import { DomainError, KitQuantityBlockedError, messageOf } from '@/domain/errors'
-import { CATALOG_KINDS, type CatalogGroupKind, type InventoryGroup, type InventoryItem } from '@/domain/model/inventory'
+import {
+  CATALOG_KINDS,
+  INVENTORY_UNITS,
+  suggestInventoryUnit,
+  type CatalogGroupKind,
+  type InventoryGroup,
+  type InventoryItem,
+  type InventoryUnit,
+} from '@/domain/model/inventory'
 import {
   canonicalGroupName,
   findGroup,
@@ -44,7 +52,7 @@ import { SelectField, TextField } from '@/presentation/components/Field'
 import { PageHeader } from '@/presentation/components/PageHeader'
 import { EmptyState, ErrorState, InlineMessage, Loading } from '@/presentation/components/States'
 import { useToast } from '@/presentation/components/Toast'
-import { inventoryErrorText, kindLabel, plural } from '@/presentation/i18n/labels'
+import { inventoryErrorText, kindLabel, plural, unitLabel, unitShortLabel } from '@/presentation/i18n/labels'
 
 import './inventory.css'
 
@@ -362,27 +370,40 @@ function ItemRow({
   isLast: boolean
 }) {
   const toast = useToast()
-  const rename = useRenameItem()
+  const update = useUpdateItem()
   const move = useMoveItem()
   const remove = useDeleteItem()
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(item.name)
+  const [unit, setUnit] = useState<InventoryUnit>(item.unit)
   const [confirm, setConfirm] = useState(false)
   const [blocked, setBlocked] = useState(false)
 
   const error = editing ? validateInventoryItem(name, group.name, groups, item.id).nameError : null
+  const nameChanged = normalizeText(name) !== item.name
+  const unitChanged = unit !== item.unit
+  const canSave = !error && (nameChanged || unitChanged)
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
-    if (error) return
+    if (error || !canSave) return
     const next = normalizeText(name)
-    if (next === item.name) return setEditing(false)
+    const patch: { name?: string; unit?: InventoryUnit } = {}
+    if (nameChanged) patch.name = next
+    if (unitChanged) patch.unit = unit
     try {
-      await rename.mutateAsync({ itemId: item.id, name: next })
+      await update.mutateAsync({ itemId: item.id, patch })
       setEditing(false)
+      toast.success('Ítem actualizado')
     } catch (caught) {
-      toast.error(DomainError.is(caught, 'CONFLICT') ? 'Ya existe un ítem con ese nombre' : messageOf(caught, 'No se pudo renombrar'))
+      toast.error(DomainError.is(caught, 'CONFLICT') ? 'Ya existe un ítem con ese nombre' : messageOf(caught, 'No se pudo guardar'))
     }
+  }
+
+  const startEdit = () => {
+    setName(item.name)
+    setUnit(item.unit)
+    setEditing(true)
   }
 
   const doDelete = async () => {
@@ -399,15 +420,28 @@ function ItemRow({
   if (editing) {
     return (
       <form className="inventory-item inventory-item--editing" onSubmit={submit}>
-        <TextField
-          label="Nombre del ítem"
-          value={name}
-          maxLength={INVENTORY_MAX_NAME_LENGTH}
-          autoFocus
-          onChange={(event) => setName(event.target.value)}
-          error={error ? inventoryErrorText(error, 'item') : null}
-        />
-        <IconButton label="Guardar" type="submit" size="sm" accent disabled={rename.isPending}>
+        <div className="inventory-item__edit-fields">
+          <TextField
+            label="Nombre del ítem"
+            value={name}
+            maxLength={INVENTORY_MAX_NAME_LENGTH}
+            autoFocus
+            onChange={(event) => setName(event.target.value)}
+            error={error ? inventoryErrorText(error, 'item') : null}
+          />
+          <SelectField
+            label="Unidad"
+            value={unit}
+            onChange={(event) => setUnit(event.target.value as InventoryUnit)}
+          >
+            {INVENTORY_UNITS.map((option) => (
+              <option key={option} value={option}>
+                {unitLabel[option]}
+              </option>
+            ))}
+          </SelectField>
+        </div>
+        <IconButton label="Guardar" type="submit" size="sm" accent disabled={update.isPending || !canSave}>
           <Check />
         </IconButton>
         <IconButton label="Cancelar" size="sm" onClick={() => setEditing(false)}>
@@ -419,7 +453,12 @@ function ItemRow({
 
   return (
     <div className="inventory-item">
-      <span className="inventory-item__name">{item.name}</span>
+      <span className="inventory-item__name">
+        <span className="inventory-item__label">{item.name}</span>
+        <span className="inventory-item__unit" title={unitLabel[item.unit]}>
+          {unitShortLabel[item.unit]}
+        </span>
+      </span>
       {isAdmin ? (
         <div className="inventory-item__actions">
           <IconButton label="Subir" size="sm" disabled={isFirst || move.isPending} onClick={() => void move.mutateAsync({ itemId: item.id, delta: -1 })}>
@@ -428,7 +467,7 @@ function ItemRow({
           <IconButton label="Bajar" size="sm" disabled={isLast || move.isPending} onClick={() => void move.mutateAsync({ itemId: item.id, delta: 1 })}>
             <ArrowDown />
           </IconButton>
-          <IconButton label={`Renombrar ${item.name}`} size="sm" onClick={() => { setName(item.name); setEditing(true) }}>
+          <IconButton label={`Editar ${item.name}`} size="sm" onClick={startEdit}>
             <Pencil />
           </IconButton>
           <IconButton label={`Eliminar ${item.name}`} size="sm" danger onClick={() => setConfirm(true)}>
@@ -491,6 +530,8 @@ function AddItemDialog({
   const [name, setName] = useState('')
   const [groupName, setGroupName] = useState(initialGroup)
   const [kind, setKind] = useState<CatalogGroupKind | ''>('')
+  const [unit, setUnit] = useState<InventoryUnit>('UNITS')
+  const [unitTouched, setUnitTouched] = useState(false)
   const [touched, setTouched] = useState(false)
 
   const validation = validateInventoryItem(name, groupName, groups)
@@ -498,6 +539,11 @@ function AddItemDialog({
   const needsKind = !existing && normalizeText(groupName).length > 0
   const kindError = touched && needsKind && !kind ? 'Un grupo nuevo necesita un tipo' : null
   const isValid = validation.isValid && (!needsKind || kind !== '')
+
+  const onNameChange = (value: string) => {
+    setName(value)
+    if (!unitTouched) setUnit(suggestInventoryUnit(value))
+  }
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
@@ -508,6 +554,7 @@ function AddItemDialog({
         name: normalizeText(name),
         groupName: canonicalGroupName(groupName, groups),
         kind: existing ? null : (kind || null),
+        unit,
       })
       toast.success('Ítem agregado')
       onClose()
@@ -576,9 +623,24 @@ function AddItemDialog({
           autoComplete="off"
           autoFocus={initialGroup.length > 0}
           value={name}
-          onChange={(event) => setName(event.target.value)}
+          onChange={(event) => onNameChange(event.target.value)}
           error={touched && validation.nameError ? inventoryErrorText(validation.nameError, 'item') : null}
         />
+        <SelectField
+          label="Unidad"
+          value={unit}
+          onChange={(event) => {
+            setUnitTouched(true)
+            setUnit(event.target.value as InventoryUnit)
+          }}
+          hint="Obligatoria · se muestra junto a las cantidades en las cajas"
+        >
+          {INVENTORY_UNITS.map((option) => (
+            <option key={option} value={option}>
+              {unitLabel[option]}
+            </option>
+          ))}
+        </SelectField>
         {existing && !existing.kind ? (
           <InlineMessage kind="info">Este grupo aún no tiene tipo. Defínelo desde su menú para habilitar chequeos o consumos.</InlineMessage>
         ) : null}

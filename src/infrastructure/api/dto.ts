@@ -78,7 +78,10 @@ export interface LineDto {
   id?: string
   itemId?: string
   itemName?: string
+  unit?: string
   quantity?: number
+  brand?: string
+  serial?: string
 }
 
 export interface KitDto {
@@ -143,6 +146,7 @@ export interface AssignmentDto {
 export interface InventoryItemDto {
   id?: string
   name?: string
+  unit?: string
   sortIndex?: number
 }
 

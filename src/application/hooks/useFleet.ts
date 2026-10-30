@@ -174,6 +174,28 @@ export function useAdjustLine() {
   })
 }
 
+export function useSetLineIdentity() {
+  const { fleet } = useContainer()
+  const { projectId } = useRequiredSession()
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      lineId,
+      brand,
+      serial,
+    }: {
+      vehicleId: string
+      lineId: string
+      brand: string
+      serial: string
+    }) => fleet.setLineIdentity(projectId, lineId, brand, serial),
+    onSuccess: async (_, { vehicleId }) => {
+      await client.invalidateQueries({ queryKey: queryKeys.vehicle(projectId, vehicleId) })
+      await client.invalidateQueries({ queryKey: queryKeys.vehicles(projectId) })
+    },
+  })
+}
+
 export function useConsumeLine() {
   const { fleet } = useContainer()
   const { projectId } = useRequiredSession()

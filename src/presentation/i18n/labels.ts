@@ -1,5 +1,5 @@
 import type { CrewRole } from '@/domain/model/crew'
-import type { CatalogGroupKind } from '@/domain/model/inventory'
+import type { CatalogGroupKind, InventoryUnit } from '@/domain/model/inventory'
 import type { Weekday } from '@/domain/model/shift'
 import type { AccountRole } from '@/domain/model/user'
 import type {
@@ -25,6 +25,16 @@ export const accountRoleLabel: Record<AccountRole, string> = {
 export const kindLabel: Record<CatalogGroupKind, string> = {
   TOOL: 'Herramienta',
   CONSUMABLE: 'Consumible',
+}
+
+export const unitLabel: Record<InventoryUnit, string> = {
+  METERS: 'Metros',
+  UNITS: 'Unidades',
+}
+
+export const unitShortLabel: Record<InventoryUnit, string> = {
+  METERS: 'm',
+  UNITS: 'ud',
 }
 
 export const weekdayShort: Record<Weekday, string> = {

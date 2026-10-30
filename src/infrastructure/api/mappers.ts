@@ -9,7 +9,7 @@ import type {
   VehicleKit,
 } from '@/domain/model/fleet'
 import type { InventoryGroup, InventoryItem } from '@/domain/model/inventory'
-import { isCatalogKind } from '@/domain/model/inventory'
+import { isCatalogKind, isInventoryUnit } from '@/domain/model/inventory'
 import type { MapLine, MapPlace, MapVersion, MapVersionSummary, StoredMap } from '@/domain/model/map'
 import type { CrewShift, Weekday } from '@/domain/model/shift'
 import { isWeekday } from '@/domain/model/shift'
@@ -33,6 +33,7 @@ import type {
   CheckDto,
   CrewDto,
   InventoryGroupDto,
+  InventoryItemDto,
   KitDto,
   LineDto,
   MapImportDto,
@@ -135,7 +136,19 @@ export function toLine(dto: LineDto): KitLine {
     id: requireId(dto.id, 'una línea'),
     itemId: text(dto.itemId),
     itemName: text(dto.itemName),
+    unit: isInventoryUnit(dto.unit) ? dto.unit : 'UNITS',
     quantity: int(dto.quantity),
+    brand: text(dto.brand),
+    serial: text(dto.serial),
+  }
+}
+
+export function toInventoryItem(dto: InventoryItemDto): InventoryItem {
+  return {
+    id: requireId(dto.id, 'un ítem'),
+    name: text(dto.name),
+    unit: isInventoryUnit(dto.unit) ? dto.unit : 'UNITS',
+    sortIndex: int(dto.sortIndex),
   }
 }
 
@@ -209,7 +222,7 @@ export function toAssignment(dto: AssignmentDto): KitAssignment {
 export function toInventoryGroup(dto: InventoryGroupDto): InventoryGroup {
   const items: InventoryItem[] = (dto.items ?? [])
     .filter((item) => text(item.id))
-    .map((item) => ({ id: text(item.id), name: text(item.name), sortIndex: int(item.sortIndex) }))
+    .map((item) => toInventoryItem(item))
     .sort((a, b) => a.sortIndex - b.sortIndex)
   return {
     id: requireId(dto.id, 'un grupo'),

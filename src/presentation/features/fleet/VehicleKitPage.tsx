@@ -26,6 +26,7 @@ import {
   useReassignKit,
   useRemoveKit,
   useRenameVehicle,
+  useSetLineIdentity,
   useToolChecks,
   useVehicle,
   useVehicles,
@@ -34,7 +35,7 @@ import { useInventory } from '@/application/hooks/useInventory'
 import { DomainError, messageOf } from '@/domain/errors'
 import { deletionBlocked } from '@/domain/kit/kitRules'
 import type { KitLine, Vehicle, VehicleKit } from '@/domain/model/fleet'
-import type { InventoryGroup } from '@/domain/model/inventory'
+import { formatInventoryQuantity, type InventoryGroup } from '@/domain/model/inventory'
 import { formatPlate, normalizePlate, validatePlate } from '@/domain/validation/crewValidator'
 import { routes } from '@/presentation/app/routes'
 import { Button, IconButton } from '@/presentation/components/Button'
@@ -44,7 +45,7 @@ import { PageHeader } from '@/presentation/components/PageHeader'
 import { EmptyState, ErrorState, InlineMessage, Loading } from '@/presentation/components/States'
 import { Stepper } from '@/presentation/components/Stepper'
 import { useToast } from '@/presentation/components/Toast'
-import { formatDateTime, kindLabel, plateErrorText, plural } from '@/presentation/i18n/labels'
+import { formatDateTime, kindLabel, plateErrorText, plural, unitLabel, unitShortLabel } from '@/presentation/i18n/labels'
 
 import './fleet.css'
 
@@ -280,10 +281,19 @@ function KitCard({
       ) : (
         kit.lines.map((line) => <KitLineRow key={line.id} vehicleId={vehicleId} kit={kit} line={line} isAdmin={isAdmin} />)
       )}
-      {!kit.kind && !isAdmin ? (
+      {!kit.kind ? (
         <div style={{ padding: '0 12px 12px' }}>
           <InlineMessage kind="info" icon={<Info />}>
-            El administrador debe definir el tipo del grupo (herramienta o consumible) para habilitar chequeos o consumos.
+            {isAdmin
+              ? 'Define el tipo del grupo en Inventario (Herramienta). Ahí podrás cargar marca y serial en cada línea de esta caja.'
+              : 'El administrador debe definir el tipo del grupo (herramienta o consumible) para habilitar chequeos o consumos.'}
+          </InlineMessage>
+        </div>
+      ) : null}
+      {kit.kind === 'TOOL' && isAdmin && kit.lines.some((line) => !line.brand && !line.serial) ? (
+        <div style={{ padding: '0 12px 12px' }}>
+          <InlineMessage kind="info" icon={<Info />}>
+            Toca «Agregar marca y serial» bajo cada herramienta para registrar la identidad de esa placa.
           </InlineMessage>
         </div>
       ) : null}
@@ -304,12 +314,18 @@ function KitLineRow({
 }) {
   const toast = useToast()
   const adjust = useAdjustLine()
+  const setIdentity = useSetLineIdentity()
   const consume = useConsumeLine()
   const check = useCheckTool()
   const [draft, setDraft] = useState(line.quantity)
   const [synced, setSynced] = useState(line.quantity)
   const [consuming, setConsuming] = useState(false)
   const [consumeQty, setConsumeQty] = useState(1)
+  const [editingIdentity, setEditingIdentity] = useState(false)
+  const [brandDraft, setBrandDraft] = useState(line.brand)
+  const [serialDraft, setSerialDraft] = useState(line.serial)
+  const isTool = kit.kind === 'TOOL'
+  const identityLabel = [line.brand, line.serial].filter(Boolean).join(' · ')
 
   // Si el servidor cambió la cantidad (otro usuario, consumo), el borrador se alinea.
   if (synced !== line.quantity) {
@@ -327,10 +343,31 @@ function KitLineRow({
     }
   }
 
+  const openIdentity = () => {
+    setBrandDraft(line.brand)
+    setSerialDraft(line.serial)
+    setEditingIdentity(true)
+  }
+
+  const saveIdentity = async () => {
+    try {
+      await setIdentity.mutateAsync({
+        vehicleId,
+        lineId: line.id,
+        brand: brandDraft,
+        serial: serialDraft,
+      })
+      toast.success('Marca y serial guardados')
+      setEditingIdentity(false)
+    } catch (error) {
+      toast.error(messageOf(error, 'No se pudo guardar marca y serial'))
+    }
+  }
+
   const doConsume = async () => {
     try {
       await consume.mutateAsync({ vehicleId, lineId: line.id, quantity: consumeQty })
-      toast.success(`Descontado ${consumeQty} de ${line.itemName}`)
+      toast.success(`Descontado ${formatInventoryQuantity(consumeQty, line.unit)} de ${line.itemName}`)
       setConsuming(false)
       setConsumeQty(1)
     } catch (error) {
@@ -349,15 +386,35 @@ function KitLineRow({
 
   return (
     <div className="kit-line">
-      <span className="kit-line__name">{line.itemName}</span>
+      <div className="kit-line__meta">
+        <span className="kit-line__name">
+          {line.itemName}
+          <span className="kit-line__unit" title={unitLabel[line.unit]}>
+            {unitShortLabel[line.unit]}
+          </span>
+        </span>
+        {isTool ? (
+          isAdmin ? (
+            <button type="button" className="kit-line__identity-btn" onClick={openIdentity}>
+              <span className="kit-line__identity-text">
+                {identityLabel || 'Agregar marca y serial'}
+              </span>
+              <Pencil size={14} aria-hidden />
+            </button>
+          ) : identityLabel ? (
+            <span className="kit-line__identity">{identityLabel}</span>
+          ) : null
+        ) : null}
+      </div>
       {isAdmin ? (
         <div
+          className="kit-line__adjust"
           onBlur={(event) => {
             if (!event.currentTarget.contains(event.relatedTarget as Node)) void commitAdjust(draft)
           }}
         >
           <Stepper
-            label={`Cantidad de ${line.itemName}`}
+            label={`Cantidad de ${line.itemName} (${unitShortLabel[line.unit]})`}
             value={draft}
             disabled={adjust.isPending}
             onChange={(value) => {
@@ -366,11 +423,12 @@ function KitLineRow({
               if (Math.abs(value - draft) === 1) void commitAdjust(value)
             }}
           />
+          <span className="kit-line__unit-hint">{unitShortLabel[line.unit]}</span>
         </div>
       ) : (
         <>
           <span className={['kit-line__qty', line.quantity === 0 ? 'kit-line__qty--zero' : ''].join(' ')}>
-            {line.quantity}
+            {formatInventoryQuantity(line.quantity, line.unit)}
           </span>
           {kit.kind === 'CONSUMABLE' ? (
             <IconButton
@@ -383,7 +441,7 @@ function KitLineRow({
               <MinusCircle />
             </IconButton>
           ) : null}
-          {kit.kind === 'TOOL' ? (
+          {isTool ? (
             <IconButton label={`Chequear ${line.itemName}`} size="sm" accent disabled={check.isPending} onClick={() => void doCheck()}>
               <CheckCircle2 />
             </IconButton>
@@ -408,9 +466,36 @@ function KitLineRow({
           </>
         }
       >
-        <p className="dialog__text">Hay {line.quantity} en la caja. ¿Cuántos se usaron?</p>
-        <div className="row" style={{ justifyContent: 'center', marginTop: 12 }}>
+        <p className="dialog__text">
+          Hay {formatInventoryQuantity(line.quantity, line.unit)} en la caja. ¿Cuántos {unitLabel[line.unit].toLowerCase()} se
+          usaron?
+        </p>
+        <div className="row" style={{ justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 12 }}>
           <Stepper label="Cantidad a consumir" value={consumeQty} min={1} max={Math.max(1, line.quantity)} onChange={setConsumeQty} />
+          <span className="muted">{unitShortLabel[line.unit]}</span>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={editingIdentity}
+        onClose={() => setEditingIdentity(false)}
+        title={`Marca y serial · ${line.itemName}`}
+        icon={<Wrench />}
+        locked={setIdentity.isPending}
+        actions={
+          <>
+            <Button variant="text" onClick={() => setEditingIdentity(false)}>
+              Cancelar
+            </Button>
+            <Button loading={setIdentity.isPending} onClick={() => void saveIdentity()}>
+              Guardar
+            </Button>
+          </>
+        }
+      >
+        <div className="stack" style={{ gap: 12, marginTop: 8 }}>
+          <TextField label="Marca" value={brandDraft} onChange={(event) => setBrandDraft(event.target.value)} placeholder="DEWALT, STANLEY…" />
+          <TextField label="Serial" value={serialDraft} onChange={(event) => setSerialDraft(event.target.value)} placeholder="Opcional" />
         </div>
       </Dialog>
     </div>
@@ -497,18 +582,26 @@ function AssignGroupDialog({ open, vehicle, onClose }: { open: boolean; vehicle:
             <span className="label">Cantidades iniciales</span>
             {group.items.map((item) => (
               <div key={item.id} className="assign-line">
-                <span>{item.name}</span>
-                <Stepper
-                  label={`Cantidad inicial de ${item.name}`}
-                  value={quantities.get(item.id) ?? 0}
-                  onChange={(value) =>
-                    setQuantities((prev) => {
-                      const next = new Map(prev)
-                      next.set(item.id, value)
-                      return next
-                    })
-                  }
-                />
+                <span>
+                  {item.name}{' '}
+                  <span className="muted" title={unitLabel[item.unit]}>
+                    ({unitShortLabel[item.unit]})
+                  </span>
+                </span>
+                <div className="row" style={{ alignItems: 'center', gap: 6 }}>
+                  <Stepper
+                    label={`Cantidad inicial de ${item.name} (${unitShortLabel[item.unit]})`}
+                    value={quantities.get(item.id) ?? 0}
+                    onChange={(value) =>
+                      setQuantities((prev) => {
+                        const next = new Map(prev)
+                        next.set(item.id, value)
+                        return next
+                      })
+                    }
+                  />
+                  <span className="muted">{unitShortLabel[item.unit]}</span>
+                </div>
               </div>
             ))}
           </>
