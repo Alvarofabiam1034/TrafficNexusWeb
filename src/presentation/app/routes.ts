@@ -12,5 +12,7 @@ export const routes = {
   workOrders: '/ordenes',
   workOrderNew: '/ordenes/nueva',
   workOrder: (workOrderId: string) => `/ordenes/${encodeURIComponent(workOrderId)}`,
+  duties: '/jornadas',
+  duty: (dutyId: string) => `/jornadas/${encodeURIComponent(dutyId)}`,
   admin: '/admin',
 } as const

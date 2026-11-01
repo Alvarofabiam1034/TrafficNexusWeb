@@ -12,6 +12,7 @@ import type { MapVersion, MapVersionSummary, StoredMap } from '../model/map'
 import type { CrewShift } from '../model/shift'
 import type { AccountRole, AppUser, Project, ProjectMember, Session } from '../model/user'
 import type { EvidencePhoto, EvidenceStatus } from '../model/evidence'
+import type { DutyDetail, DutyHistoryEntry, DutyHistoryFilter } from '../model/duty'
 import type {
   ParsedWorkOrderDraft,
   WorkOrder,
@@ -159,6 +160,12 @@ export interface WorkOrderRepository {
   create(projectId: string, draft: WorkOrderCreateDraft): Promise<WorkOrder>
   update(projectId: string, workOrderId: string, draft: WorkOrderUpdateDraft): Promise<WorkOrder>
   assign(projectId: string, workOrderId: string, crewId: string): Promise<WorkOrder>
+}
+
+/** Jornadas de cuadrilla y resultado de sus checklists de herramienta (solo lectura). */
+export interface DutyRepository {
+  history(projectId: string, filter: DutyHistoryFilter): Promise<DutyHistoryEntry[]>
+  detail(projectId: string, dutyId: string): Promise<DutyDetail>
 }
 
 /** Evidencias fotográficas de una OT (lectura + nota; upload es Android). */

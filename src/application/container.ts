@@ -1,6 +1,7 @@
 import type { Session } from '@/domain/model/user'
 import type {
   CrewRepository,
+  DutyRepository,
   EvidenceRepository,
   FleetRepository,
   InventoryRepository,
@@ -13,6 +14,7 @@ import type {
 } from '@/domain/repository'
 import {
   ApiCrewRepository,
+  ApiDutyRepository,
   ApiEvidenceRepository,
   ApiFleetRepository,
   ApiInventoryRepository,
@@ -40,6 +42,7 @@ export interface AppContainer {
   readonly preferences: PreferencesRepository
   readonly workOrders: WorkOrderRepository
   readonly evidences: EvidenceRepository
+  readonly duties: DutyRepository
 }
 
 /**
@@ -72,5 +75,6 @@ export function createContainer(baseUrl: string = import.meta.env.VITE_API_BASE_
     preferences: new LocalPreferencesRepository(),
     workOrders: new ApiWorkOrderRepository(http),
     evidences: new ApiEvidenceRepository(http),
+    duties: new ApiDutyRepository(http),
   }
 }

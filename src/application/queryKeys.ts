@@ -24,5 +24,8 @@ export const queryKeys = {
   evidences: (projectId: string, workOrderId: string) =>
     ['project', projectId, 'work-orders', workOrderId, 'evidences'] as const,
   evidence: (projectId: string, evidenceId: string) => ['project', projectId, 'evidences', evidenceId] as const,
+  duties: (projectId: string, filter: { crewId?: string; from?: string; to?: string }) =>
+    ['project', projectId, 'duties', filter] as const,
+  duty: (projectId: string, dutyId: string) => ['project', projectId, 'duties', dutyId] as const,
   project: (projectId: string) => ['project', projectId] as const,
 }

@@ -1,6 +1,15 @@
 import type { Crew, CrewMember } from '@/domain/model/crew'
 import { isCrewRole } from '@/domain/model/crew'
 import type {
+  ChecklistStatus,
+  Duty,
+  DutyChecklist,
+  DutyChecklistLine,
+  DutyDetail,
+  DutyHistoryEntry,
+} from '@/domain/model/duty'
+import { isChecklistMark, isDutyState } from '@/domain/model/duty'
+import type {
   KitAssignment,
   KitLine,
   StockMovement,
@@ -32,6 +41,11 @@ import type {
   AssignmentDto,
   CheckDto,
   CrewDto,
+  DutyChecklistDto,
+  DutyChecklistLineDto,
+  DutyDetailDto,
+  DutyDto,
+  DutyHistoryEntryDto,
   InventoryGroupDto,
   InventoryItemDto,
   KitDto,
@@ -331,6 +345,71 @@ export function toWorkOrder(dto: WorkOrderDto): WorkOrder {
     createdByName: text(dto.createdByName),
     place: toWorkOrderPlace(dto.place),
     items: (dto.items ?? []).map(toWorkOrderItem),
+  }
+}
+
+function toChecklistStatus(value: unknown): ChecklistStatus | null {
+  return value === 'IN_PROGRESS' || value === 'COMPLETED' ? value : null
+}
+
+export function toDuty(dto: DutyDto): Duty {
+  return {
+    id: requireId(dto.id, 'una jornada'),
+    crewId: text(dto.crewId),
+    vehicleId: text(dto.vehicleId),
+    plate: text(dto.plate),
+    state: isDutyState(dto.state) ? dto.state : 'OPEN',
+    openedAt: text(dto.openedAt),
+    closedAt: dto.closedAt ? text(dto.closedAt) : null,
+    openedByName: text(dto.openedByName),
+    closedByName: text(dto.closedByName),
+    closeReason: text(dto.closeReason),
+    handoverFromDutyId: dto.handoverFromDutyId ? text(dto.handoverFromDutyId) : null,
+    regularizedFromDutyId: dto.regularizedFromDutyId ? text(dto.regularizedFromDutyId) : null,
+  }
+}
+
+export function toDutyHistoryEntry(dto: DutyHistoryEntryDto): DutyHistoryEntry {
+  return {
+    ...toDuty(dto),
+    openChecklistStatus: toChecklistStatus(dto.openChecklistStatus),
+    closeChecklistStatus: toChecklistStatus(dto.closeChecklistStatus),
+    missingAtOpen: int(dto.missingAtOpen),
+    missingAtClose: int(dto.missingAtClose),
+    lostInDuty: int(dto.lostInDuty),
+  }
+}
+
+function toDutyChecklistLine(dto: DutyChecklistLineDto): DutyChecklistLine {
+  return {
+    id: requireId(dto.id, 'una línea de checklist'),
+    itemId: text(dto.itemId),
+    itemName: text(dto.itemName),
+    groupName: text(dto.groupName),
+    brand: text(dto.brand),
+    serial: text(dto.serial),
+    mark: isChecklistMark(dto.mark) ? dto.mark : 'PENDING',
+    markedByName: text(dto.markedByName),
+    openMark: isChecklistMark(dto.openMark) ? dto.openMark : null,
+  }
+}
+
+function toDutyChecklist(dto: DutyChecklistDto | null | undefined): DutyChecklist | null {
+  if (!dto) return null
+  return {
+    id: requireId(dto.id, 'un checklist'),
+    status: toChecklistStatus(dto.status) ?? 'IN_PROGRESS',
+    completedAt: dto.completedAt ? text(dto.completedAt) : null,
+    completedByName: text(dto.completedByName),
+    lines: (dto.lines ?? []).map(toDutyChecklistLine),
+  }
+}
+
+export function toDutyDetail(dto: DutyDetailDto): DutyDetail {
+  return {
+    duty: toDuty(dto.duty ?? {}),
+    openChecklist: toDutyChecklist(dto.openChecklist),
+    closeChecklist: toDutyChecklist(dto.closeChecklist),
   }
 }
 

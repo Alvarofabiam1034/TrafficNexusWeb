@@ -24,6 +24,8 @@ const ExternalsPage = lazy(() => import('@/presentation/features/externals/Exter
 const WorkOrderListPage = lazy(() => import('@/presentation/features/workOrders/WorkOrderListPage'))
 const WorkOrderNewPage = lazy(() => import('@/presentation/features/workOrders/WorkOrderNewPage'))
 const WorkOrderDetailPage = lazy(() => import('@/presentation/features/workOrders/WorkOrderDetailPage'))
+const DutyListPage = lazy(() => import('@/presentation/features/duties/DutyListPage'))
+const DutyDetailPage = lazy(() => import('@/presentation/features/duties/DutyDetailPage'))
 const AdminPage = lazy(() => import('@/presentation/features/admin/AdminPage'))
 
 function createQueryClient(): QueryClient {
@@ -46,7 +48,7 @@ function createQueryClient(): QueryClient {
 /** Evita que el HMR de Vite deje un container viejo sin repos nuevos (p. ej. evidences). */
 function useAppContainer(): AppContainer {
   const [container, setContainer] = useState(createContainer)
-  if (!container.evidences) {
+  if (!container.evidences || !container.duties) {
     const next = createContainer()
     setContainer(next)
     return next
@@ -80,6 +82,8 @@ export function App() {
                     <Route path={routes.workOrders} element={<WorkOrderListPage />} />
                     <Route path={routes.workOrderNew} element={<WorkOrderNewPage />} />
                     <Route path="/ordenes/:workOrderId" element={<WorkOrderDetailPage />} />
+                    <Route path={routes.duties} element={<DutyListPage />} />
+                    <Route path="/jornadas/:dutyId" element={<DutyDetailPage />} />
                     <Route path={routes.admin} element={<AdminPage />} />
                   </Route>
                 </Route>

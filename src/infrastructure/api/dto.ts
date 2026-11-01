@@ -243,6 +243,55 @@ export interface ParsedWorkOrderDraftDto {
   items?: WorkOrderItemDto[] | null
 }
 
+export interface DutyDto {
+  id?: string
+  crewId?: string
+  vehicleId?: string
+  plate?: string
+  state?: string
+  openedAt?: string
+  closedAt?: string | null
+  openedByName?: string
+  closedByName?: string
+  closeReason?: string
+  handoverFromDutyId?: string | null
+  regularizedFromDutyId?: string | null
+}
+
+export interface DutyHistoryEntryDto extends DutyDto {
+  openChecklistStatus?: string
+  closeChecklistStatus?: string
+  missingAtOpen?: number
+  missingAtClose?: number
+  lostInDuty?: number
+}
+
+export interface DutyChecklistLineDto {
+  id?: string
+  itemId?: string
+  itemName?: string
+  groupName?: string
+  brand?: string
+  serial?: string
+  mark?: string
+  markedByName?: string
+  openMark?: string
+}
+
+export interface DutyChecklistDto {
+  id?: string
+  status?: string
+  completedAt?: string | null
+  completedByName?: string
+  lines?: DutyChecklistLineDto[] | null
+}
+
+export interface DutyDetailDto {
+  duty?: DutyDto
+  openChecklist?: DutyChecklistDto | null
+  closeChecklist?: DutyChecklistDto | null
+}
+
 export interface EvidencePhotoDto {
   id?: string
   photoCode?: string

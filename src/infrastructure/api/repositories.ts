@@ -13,6 +13,7 @@ import type { MapVersion, MapVersionSummary, StoredMap } from '@/domain/model/ma
 import type { CrewShift } from '@/domain/model/shift'
 import type { AppUser, Project, ProjectMember, Session } from '@/domain/model/user'
 import type { EvidencePhoto, EvidenceStatus } from '@/domain/model/evidence'
+import type { DutyDetail, DutyHistoryEntry, DutyHistoryFilter } from '@/domain/model/duty'
 import type {
   ParsedWorkOrderDraft,
   WorkOrder,
@@ -23,6 +24,7 @@ import type {
 import type {
   CrewDraft,
   CrewRepository,
+  DutyRepository,
   EvidenceRepository,
   FleetRepository,
   InventoryItemPatch,
@@ -45,6 +47,8 @@ import type {
   AssignmentDto,
   CheckDto,
   CrewDto,
+  DutyDetailDto,
+  DutyHistoryEntryDto,
   InventoryGroupDto,
   InventoryItemDto,
   KitDto,
@@ -65,6 +69,8 @@ import {
   toAssignment,
   toCheck,
   toCrew,
+  toDutyDetail,
+  toDutyHistoryEntry,
   toEvidencePhoto,
   toInventoryGroup,
   toInventoryItem,
@@ -499,6 +505,23 @@ export class ApiWorkOrderRepository implements WorkOrderRepository {
         crewId,
       }),
     )
+  }
+}
+
+export class ApiDutyRepository implements DutyRepository {
+  constructor(private readonly http: HttpClient) {}
+
+  async history(projectId: string, filter: DutyHistoryFilter): Promise<DutyHistoryEntry[]> {
+    const dtos = await this.http.get<DutyHistoryEntryDto[]>(`${projectPath(projectId)}/duties`, {
+      crewId: filter.crewId,
+      from: filter.from,
+      to: filter.to,
+    })
+    return dtos.map(toDutyHistoryEntry)
+  }
+
+  async detail(projectId: string, dutyId: string): Promise<DutyDetail> {
+    return toDutyDetail(await this.http.get<DutyDetailDto>(`${projectPath(projectId)}/duties/${enc(dutyId)}`))
   }
 }
 
