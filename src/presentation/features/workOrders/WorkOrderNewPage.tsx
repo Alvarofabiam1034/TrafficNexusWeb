@@ -10,7 +10,7 @@ import {
   useParseWorkOrder,
   useUpdateWorkOrder,
 } from '@/application/hooks/useWorkOrders'
-import { messageOf } from '@/domain/errors'
+import { DomainError, messageOf } from '@/domain/errors'
 import type { WorkOrderItemInput } from '@/domain/model/workOrder'
 import { formatPlate } from '@/domain/validation/crewValidator'
 import { routes } from '@/presentation/app/routes'
@@ -158,7 +158,11 @@ function WorkOrderNewForm({ placeId }: { placeId: string }) {
       toast.success(`OT del externo ${order.externalNumber} asignada`)
       navigate(routes.workOrder(order.id))
     } catch (error) {
-      toast.error(messageOf(error, 'No se pudo asignar la orden'))
+      toast.error(
+        DomainError.hasCode(error, 'CREW_OUTSIDE_SCHEDULE')
+          ? messageOf(error, 'La cuadrilla está fuera de su franja horaria; no se puede asignar ahora')
+          : messageOf(error, 'No se pudo asignar la orden'),
+      )
     }
   }
 

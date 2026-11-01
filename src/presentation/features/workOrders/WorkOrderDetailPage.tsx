@@ -5,9 +5,15 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useIsAdmin } from '@/application/ContainerContext'
 import { useCrews } from '@/application/hooks/useCrews'
 import { useAssignWorkOrder, useUpdateWorkOrder, useWorkOrder } from '@/application/hooks/useWorkOrders'
-import { messageOf } from '@/domain/errors'
+import { DomainError, messageOf } from '@/domain/errors'
 import { drivePreviewUrl } from '@/domain/map/drivePreview'
-import { maxPriority, type WorkOrderItemInput, type WorkOrderPlace } from '@/domain/model/workOrder'
+import {
+  maxPriority,
+  workOrderStateChipClass,
+  workOrderStateLabel,
+  type WorkOrderItemInput,
+  type WorkOrderPlace,
+} from '@/domain/model/workOrder'
 import { formatPlate } from '@/domain/validation/crewValidator'
 import { routes } from '@/presentation/app/routes'
 import { Button } from '@/presentation/components/Button'
@@ -125,7 +131,11 @@ export default function WorkOrderDetailPage() {
       toast.success(`Asignada al externo ${next.externalNumber}`)
       navigate(routes.workOrder(next.id))
     } catch (error) {
-      toast.error(messageOf(error, 'No se pudo asignar'))
+      toast.error(
+        DomainError.hasCode(error, 'CREW_OUTSIDE_SCHEDULE')
+          ? messageOf(error, 'La cuadrilla está fuera de su franja horaria; no se puede asignar ahora')
+          : messageOf(error, 'No se pudo asignar'),
+      )
     }
   }
 
@@ -135,9 +145,7 @@ export default function WorkOrderDetailPage() {
         title={data.externalNumber ? `Externo ${data.externalNumber}` : 'Orden'}
         subtitle={
           <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-            <span className={['ot-chip', data.state === 'DRAFT' ? 'ot-chip--draft' : ''].join(' ')}>
-              {data.state === 'DRAFT' ? 'Borrador' : data.state === 'ASSIGNED' ? 'Asignada' : data.state}
-            </span>
+            <span className={workOrderStateChipClass(data.state)}>{workOrderStateLabel(data.state)}</span>
             {data.statusReported ? <span className="ot-chip ot-chip--status">{data.statusReported}</span> : null}
             {priority ? <span className="ot-chip ot-chip--priority">{priority}</span> : null}
           </span>
@@ -353,6 +361,25 @@ export default function WorkOrderDetailPage() {
                 <div className="ot-detail__block">
                   <h2>Contexto adicional</h2>
                   <p className="ot-detail__text">{data.adminNotes}</p>
+                </div>
+              ) : null}
+
+              {data.state === 'DONE' ? (
+                <div className="ot-detail__block">
+                  <h2>Cierre</h2>
+                  <p className="ot-detail__text">
+                    {data.closedByName ? `Cerrada por ${data.closedByName}` : 'Orden finalizada'}
+                    {data.closedAt ? ` · ${formatDateTime(data.closedAt)}` : ''}
+                  </p>
+                  {data.closeComment ? (
+                    <p className="ot-detail__text" style={{ marginTop: 8 }}>
+                      {data.closeComment}
+                    </p>
+                  ) : (
+                    <p className="ot-detail__text" style={{ marginTop: 8, opacity: 0.7 }}>
+                      Sin comentario de cierre.
+                    </p>
+                  )}
                 </div>
               ) : null}
             </>

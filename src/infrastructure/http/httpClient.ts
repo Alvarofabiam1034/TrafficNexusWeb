@@ -97,7 +97,12 @@ export class HttpClient {
       const body = (parsed ?? {}) as ErrorBody
       const kind = kindOf(response.status, body.code)
       if (response.status === 401 && token) this.tokens.onUnauthorized()
-      throw new DomainError(kind, body.error || defaultMessage(kind), response.status)
+      throw new DomainError(
+        kind,
+        body.error || defaultMessage(kind),
+        response.status,
+        body.code,
+      )
     }
     return parsed as T
   }

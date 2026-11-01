@@ -224,6 +224,10 @@ export interface WorkOrderDto {
   assignedAt?: string | null
   assignedBy?: string | null
   assignedByName?: string
+  closedAt?: string | null
+  closedBy?: string | null
+  closedByName?: string
+  closeComment?: string
   createdAt?: string
   updatedAt?: string
   createdBy?: string | null

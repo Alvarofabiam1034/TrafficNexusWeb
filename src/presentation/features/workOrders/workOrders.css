@@ -28,6 +28,26 @@
   color: #bdbdbd;
 }
 
+.ot-chip--assigned {
+  background: rgba(66, 165, 245, 0.16);
+  color: #90caf9;
+}
+
+.ot-chip--progress {
+  background: rgba(255, 179, 0, 0.16);
+  color: #ffcc80;
+}
+
+.ot-chip--done {
+  background: rgba(102, 187, 106, 0.18);
+  color: #a5d6a7;
+}
+
+.ot-chip--cancelled {
+  background: rgba(239, 83, 80, 0.16);
+  color: #ef9a9a;
+}
+
 .ot-inline {
   width: 100%;
   min-width: 72px;

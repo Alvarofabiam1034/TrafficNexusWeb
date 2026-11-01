@@ -6,6 +6,35 @@ export function isWorkOrderState(value: unknown): value is WorkOrderState {
   return typeof value === 'string' && (WORK_ORDER_STATES as readonly string[]).includes(value)
 }
 
+const WORK_ORDER_STATE_LABELS: Record<WorkOrderState, string> = {
+  DRAFT: 'Borrador',
+  ASSIGNED: 'Asignada',
+  IN_PROGRESS: 'En progreso',
+  DONE: 'Finalizada',
+  CANCELLED: 'Cancelada',
+}
+
+export function workOrderStateLabel(state: WorkOrderState): string {
+  return WORK_ORDER_STATE_LABELS[state]
+}
+
+export function workOrderStateChipClass(state: WorkOrderState): string {
+  switch (state) {
+    case 'DRAFT':
+      return 'ot-chip ot-chip--draft'
+    case 'ASSIGNED':
+      return 'ot-chip ot-chip--assigned'
+    case 'IN_PROGRESS':
+      return 'ot-chip ot-chip--progress'
+    case 'DONE':
+      return 'ot-chip ot-chip--done'
+    case 'CANCELLED':
+      return 'ot-chip ot-chip--cancelled'
+    default:
+      return 'ot-chip'
+  }
+}
+
 /** Fila de la tabla del mensaje WhatsApp (ID de equipo / semáforo). */
 export interface WorkOrderItem {
   readonly id: string
@@ -42,6 +71,10 @@ export interface WorkOrder {
   readonly assignedAt: string | null
   readonly assignedBy: string | null
   readonly assignedByName: string
+  readonly closedAt: string | null
+  readonly closedBy: string | null
+  readonly closedByName: string
+  readonly closeComment: string
   readonly createdAt: string
   readonly updatedAt: string
   readonly createdBy: string | null

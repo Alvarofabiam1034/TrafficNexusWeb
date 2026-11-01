@@ -14,16 +14,23 @@ export type DomainErrorKind =
 export class DomainError extends Error {
   readonly kind: DomainErrorKind
   readonly status: number
+  /** Código de negocio del backend (p. ej. CREW_OUTSIDE_SCHEDULE). */
+  readonly code?: string
 
-  constructor(kind: DomainErrorKind, message: string, status = 0) {
+  constructor(kind: DomainErrorKind, message: string, status = 0, code?: string) {
     super(message)
     this.name = 'DomainError'
     this.kind = kind
     this.status = status
+    this.code = code
   }
 
   static is(error: unknown, kind?: DomainErrorKind): error is DomainError {
     return error instanceof DomainError && (kind === undefined || error.kind === kind)
+  }
+
+  static hasCode(error: unknown, code: string): error is DomainError {
+    return error instanceof DomainError && error.code === code
   }
 }
 
