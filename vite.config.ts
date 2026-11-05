@@ -19,6 +19,8 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 5173,
+      // Túneles Cloudflare Quick Tunnel (*.trycloudflare.com) para acceso remoto sin deploy.
+      allowedHosts: ['.trycloudflare.com'],
       proxy: {
         '/v1': {
           target: proxyTarget,
