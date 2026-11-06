@@ -3,7 +3,15 @@ import { describe, expect, it } from 'vitest'
 import type { Crew } from '../model/crew'
 import type { CrewShift, Weekday } from '../model/shift'
 import { civilDate } from './civilDate'
-import { materializeWeek, overlaps, plateShareError, problems, shiftsForCard, sortShifts } from './scheduleRules'
+import {
+  isOnShiftAt,
+  materializeWeek,
+  overlaps,
+  plateShareError,
+  problems,
+  shiftsForCard,
+  sortShifts,
+} from './scheduleRules'
 
 const ALL_WEEK: Weekday[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']
 
@@ -89,5 +97,14 @@ describe('scheduleRules', () => {
     const habitual = shift({ id: 'h' })
     expect(sortShifts([future, habitual, past]).map((s) => s.id)).toEqual(['h', 'p', 'f'])
     expect(shiftsForCard([future, habitual, past], civilDate(2026, 10, 14)).map((s) => s.id)).toEqual(['h', 'f'])
+  })
+
+  it('sabe si la cuadrilla está en turno, incluido el nocturno de ayer', () => {
+    const day = crew('a', 'ABC123', [shift({ id: 'd', startMinute: 6 * 60, endMinute: 14 * 60 })])
+    const night = crew('b', 'ABC123', [shift({ id: 'n', startMinute: 22 * 60, endMinute: 6 * 60 })])
+    expect(isOnShiftAt(day, new Date(2026, 10, 5, 10, 0))).toBe(true)
+    expect(isOnShiftAt(day, new Date(2026, 10, 5, 14, 0))).toBe(false)
+    expect(isOnShiftAt(night, new Date(2026, 10, 5, 3, 0))).toBe(true)
+    expect(isOnShiftAt(night, new Date(2026, 10, 5, 12, 0))).toBe(false)
   })
 })

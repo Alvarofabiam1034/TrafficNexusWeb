@@ -10,6 +10,7 @@ const line = (mark: DutyChecklistLine['mark'], openMark: DutyChecklistLine['open
   brand: '',
   serial: '',
   mark,
+  comment: '',
   markedByName: '',
   openMark,
 })
@@ -90,5 +91,24 @@ describe('toolReviewRows', () => {
       ['meter', 'MISSING_AT_OPEN'],
       ['drill', 'NOT_REVIEWED'],
     ])
+  })
+
+  it('expone comentarios solo cuando la marca es MISSING', () => {
+    const rows = toolReviewRows({
+      duty,
+      openChecklist: checklist([
+        { ...tool('drill', 'OK'), comment: 'no debería verse' },
+        { ...tool('meter', 'MISSING'), comment: 'faltó una punta' },
+      ]),
+      closeChecklist: checklist([
+        { ...tool('drill', 'MISSING', 'OK'), comment: 'no vuelve el taladro' },
+        { ...tool('meter', 'MISSING', 'MISSING'), comment: 'sigue sin punta' },
+      ]),
+    })
+    const byId = Object.fromEntries(rows.map((row) => [row.itemId, row]))
+    expect(byId.drill?.openComment).toBe('')
+    expect(byId.drill?.closeComment).toBe('no vuelve el taladro')
+    expect(byId.meter?.openComment).toBe('faltó una punta')
+    expect(byId.meter?.closeComment).toBe('sigue sin punta')
   })
 })

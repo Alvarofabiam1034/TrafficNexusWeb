@@ -61,6 +61,8 @@ export interface DutyChecklistLine {
   readonly brand: string
   readonly serial: string
   readonly mark: ChecklistMark
+  /** Detalle opcional del hallazgo cuando mark = MISSING. */
+  readonly comment: string
   readonly markedByName: string
   /** Marca en la apertura; solo en líneas de cierre. Null si no estaba al abrir. */
   readonly openMark: ChecklistMark | null
@@ -122,7 +124,9 @@ export interface ToolReviewRow {
   readonly brand: string
   readonly serial: string
   readonly openMark: ChecklistMark | null
+  readonly openComment: string
   readonly closeMark: ChecklistMark | null
+  readonly closeComment: string
   readonly outcome: ToolOutcome
 }
 
@@ -132,6 +136,10 @@ function outcomeOf(openMark: ChecklistMark | null, closeMark: ChecklistMark | nu
   return openMark === 'MISSING' ? 'MISSING_AT_OPEN' : 'NOT_REVIEWED'
 }
 
+function commentIfMissing(mark: ChecklistMark | null | undefined, comment: string | undefined): string {
+  return mark === 'MISSING' ? (comment ?? '').trim() : ''
+}
+
 /** Una fila por herramienta (apertura ∪ cierre), novedades primero. */
 export function toolReviewRows(detail: DutyDetail): ToolReviewRow[] {
   const rows: ToolReviewRow[] = []
@@ -139,7 +147,8 @@ export function toolReviewRows(detail: DutyDetail): ToolReviewRow[] {
   const openByItem = new Map((detail.openChecklist?.lines ?? []).map((line) => [line.itemId, line]))
   for (const line of detail.closeChecklist?.lines ?? []) {
     seen.add(line.itemId)
-    const openMark = line.openMark ?? openByItem.get(line.itemId)?.mark ?? null
+    const openLine = openByItem.get(line.itemId)
+    const openMark = line.openMark ?? openLine?.mark ?? null
     rows.push({
       itemId: line.itemId,
       itemName: line.itemName,
@@ -147,7 +156,9 @@ export function toolReviewRows(detail: DutyDetail): ToolReviewRow[] {
       brand: line.brand,
       serial: line.serial,
       openMark,
+      openComment: commentIfMissing(openMark, openLine?.comment),
       closeMark: line.mark,
+      closeComment: commentIfMissing(line.mark, line.comment),
       outcome: outcomeOf(openMark, line.mark),
     })
   }
@@ -160,7 +171,9 @@ export function toolReviewRows(detail: DutyDetail): ToolReviewRow[] {
       brand: line.brand,
       serial: line.serial,
       openMark: line.mark,
+      openComment: commentIfMissing(line.mark, line.comment),
       closeMark: null,
+      closeComment: '',
       outcome: outcomeOf(line.mark, null),
     })
   }

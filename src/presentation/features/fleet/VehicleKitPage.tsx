@@ -39,6 +39,12 @@ import { formatInventoryQuantity, type InventoryGroup } from '@/domain/model/inv
 import { formatPlate, normalizePlate, validatePlate } from '@/domain/validation/crewValidator'
 import { routes } from '@/presentation/app/routes'
 import { Button, IconButton } from '@/presentation/components/Button'
+import {
+  CollapseAllBar,
+  CollapsibleGroup,
+  groupTone,
+  useCollapsedGroups,
+} from '@/presentation/components/CollapsibleGroup'
 import { Dialog } from '@/presentation/components/Dialog'
 import { SelectField, TextField } from '@/presentation/components/Field'
 import { PageHeader } from '@/presentation/components/PageHeader'
@@ -73,6 +79,11 @@ function VehicleDetail({ vehicle }: { vehicle: Vehicle }) {
   const [pendingRemove, setPendingRemove] = useState<VehicleKit | null>(null)
   const [reassigning, setReassigning] = useState<VehicleKit | null>(null)
   const removeKit = useRemoveKit()
+  const collapse = useCollapsedGroups('tn.vehicleKits.collapsed')
+  const kitIds = vehicle.kits.map((kit) => kit.id)
+  const toolKits = vehicle.kits.filter((kit) => kit.kind === 'TOOL').length
+  const consumableKits = vehicle.kits.filter((kit) => kit.kind === 'CONSUMABLE').length
+  const untypedKits = vehicle.kits.length - toolKits - consumableKits
 
   const confirmRemove = async () => {
     if (!pendingRemove) return
@@ -133,18 +144,39 @@ function VehicleDetail({ vehicle }: { vehicle: Vehicle }) {
               }
             />
           ) : (
-            <div className="kit-grid">
-              {vehicle.kits.map((kit) => (
-                <KitCard
-                  key={kit.id}
-                  vehicleId={vehicle.id}
-                  kit={kit}
-                  isAdmin={isAdmin}
-                  onRemove={() => setPendingRemove(kit)}
-                  onReassign={() => setReassigning(kit)}
-                />
-              ))}
-            </div>
+            <>
+              <CollapseAllBar ids={kitIds} isCollapsed={collapse.isCollapsed} setAll={collapse.setAll}>
+                {toolKits > 0 ? (
+                  <span className="cgroup-stat cgroup-stat--tool">
+                    <Wrench size={14} /> <strong>{toolKits}</strong> {toolKits === 1 ? 'caja de herramienta' : 'cajas de herramienta'}
+                  </span>
+                ) : null}
+                {consumableKits > 0 ? (
+                  <span className="cgroup-stat cgroup-stat--consumable">
+                    <Boxes size={14} /> <strong>{consumableKits}</strong> {consumableKits === 1 ? 'caja de consumibles' : 'cajas de consumibles'}
+                  </span>
+                ) : null}
+                {untypedKits > 0 ? (
+                  <span className="cgroup-stat cgroup-stat--untyped">
+                    <Info size={14} /> <strong>{untypedKits}</strong> sin tipo
+                  </span>
+                ) : null}
+              </CollapseAllBar>
+              <div className="cgroup-grid">
+                {vehicle.kits.map((kit) => (
+                  <KitCard
+                    key={kit.id}
+                    vehicleId={vehicle.id}
+                    kit={kit}
+                    isAdmin={isAdmin}
+                    collapsed={collapse.isCollapsed(kit.id)}
+                    onToggle={() => collapse.toggle(kit.id)}
+                    onRemove={() => setPendingRemove(kit)}
+                    onReassign={() => setReassigning(kit)}
+                  />
+                ))}
+              </div>
+            </>
           )
         ) : null}
         {tab === 'MOVEMENTS' ? <MovementsList vehicleId={vehicle.id} /> : null}
@@ -205,12 +237,16 @@ function KitCard({
   vehicleId,
   kit,
   isAdmin,
+  collapsed,
+  onToggle,
   onRemove,
   onReassign,
 }: {
   vehicleId: string
   kit: VehicleKit
   isAdmin: boolean
+  collapsed: boolean
+  onToggle: () => void
   onRemove: () => void
   onReassign: () => void
 }) {
@@ -226,24 +262,24 @@ function KitCard({
     return () => document.removeEventListener('mousedown', close)
   }, [menuOpen])
 
+  const emptyLines = kit.lines.filter((line) => line.quantity === 0).length
+
   return (
-    <article className="card">
-      <div className="kit-card__head">
-        <span className="icon-badge icon-badge--hi">{kit.kind === 'TOOL' ? <Wrench /> : <Boxes />}</span>
-        <div className="kit-card__title">
-          <h3>{kit.groupName}</h3>
-          <div className="row" style={{ gap: 6 }}>
-            {kit.kind ? (
-              <span className={`badge ${kit.kind === 'TOOL' ? 'badge--primary' : 'badge--accent'}`}>{kindLabel[kit.kind]}</span>
-            ) : (
-              <span className="badge badge--caution">Sin tipo</span>
-            )}
-            <span className="muted" style={{ fontSize: '0.8125rem' }}>
-              {plural(kit.lines.length, 'ítem', 'ítems')}
-            </span>
-          </div>
-        </div>
-        {isAdmin ? (
+    <CollapsibleGroup
+      tone={groupTone(kit.kind)}
+      icon={kit.kind === 'TOOL' ? <Wrench /> : <Boxes />}
+      title={kit.groupName}
+      collapsed={collapsed}
+      onToggle={onToggle}
+      meta={
+        <>
+          <span className="cgroup-kind">{kit.kind ? kindLabel[kit.kind] : 'Sin tipo'}</span>
+          <span className="cgroup-count">{plural(kit.lines.length, 'ítem', 'ítems')}</span>
+          {emptyLines > 0 ? <span className="cgroup-count cgroup-count--alert">{emptyLines} en cero</span> : null}
+        </>
+      }
+      actions={
+        isAdmin ? (
           <div ref={menuRef} style={{ position: 'relative' }}>
             <IconButton label="Más opciones" size="sm" onClick={() => setMenuOpen((value) => !value)}>
               <MoreVertical />
@@ -273,9 +309,9 @@ function KitCard({
               </div>
             ) : null}
           </div>
-        ) : null}
-      </div>
-      <hr className="card__divider" />
+        ) : undefined
+      }
+    >
       {kit.lines.length === 0 ? (
         <div className="kit-empty">El grupo no tiene ítems en el inventario.</div>
       ) : (
@@ -297,7 +333,7 @@ function KitCard({
           </InlineMessage>
         </div>
       ) : null}
-    </article>
+    </CollapsibleGroup>
   )
 }
 
@@ -385,7 +421,7 @@ function KitLineRow({
   }
 
   return (
-    <div className="kit-line">
+    <div className="kit-line cgroup-row">
       <div className="kit-line__meta">
         <span className="kit-line__name">
           {line.itemName}

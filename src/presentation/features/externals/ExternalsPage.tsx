@@ -1,14 +1,38 @@
-import { ClipboardList, ExternalLink, FileText, FileUp, History, Layers, MapPin, Route, Search, X } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import {
+  ChevronRight,
+  ClipboardList,
+  ClipboardPlus,
+  ExternalLink,
+  FileText,
+  FileUp,
+  History,
+  Layers,
+  MapPin,
+  Route,
+  Search,
+  X,
+} from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { useContainer, useIsAdmin } from '@/application/ContainerContext'
+import { useCrews } from '@/application/hooks/useCrews'
 import { useImportMap, useLatestMap, useMapVersion, useMapVersions } from '@/application/hooks/useMap'
+import { useWorkOrders } from '@/application/hooks/useWorkOrders'
+import type { Crew } from '@/domain/model/crew'
 import { messageOf } from '@/domain/errors'
 import { drivePreviewUrl } from '@/domain/map/drivePreview'
+import { ACTIVE_STATES, activeStateOf, isActiveOrder, ordersByPlace } from '@/domain/map/placeOrders'
 import { workfronts, type Workfront } from '@/domain/map/workfronts'
 import { EMPTY_MAP, type MapPlace, type StoredMap } from '@/domain/model/map'
-import { externalNumberFromPlaceName } from '@/domain/model/workOrder'
+import {
+  externalNumberFromPlaceName,
+  maxPriority,
+  workOrderStateLabel,
+  type WorkOrder,
+  type WorkOrderState,
+} from '@/domain/model/workOrder'
+import { formatPlate } from '@/domain/validation/crewValidator'
 import type { LayerPreferences } from '@/domain/repository'
 import { parseKmlFile } from '@/infrastructure/kml/kmlParser'
 import type { MapCameraTarget } from '@/infrastructure/maps/googleMaps'
@@ -20,10 +44,20 @@ import { Switch } from '@/presentation/components/Switch'
 import { useToast } from '@/presentation/components/Toast'
 import { formatDateTime, plural } from '@/presentation/i18n/labels'
 
+import { priorityTone, STATE_TONE } from '../workOrders/workOrderTone'
 import { GoogleMapView } from './GoogleMapView'
 import './externals.css'
 
 const MAX_FILE_BYTES = 25 * 1024 * 1024
+const WIDE_SCREEN = '(min-width: 900px)'
+
+const STATE_MARKER_COLOR: Partial<Record<WorkOrderState, string>> = {
+  IN_PROGRESS: '#FFC928',
+  ASSIGNED: '#64B5F6',
+  DRAFT: '#9AA5B4',
+}
+
+type TrackingFilter = 'ALL' | WorkOrderState
 
 export default function ExternalsPage() {
   const latest = useLatestMap()
@@ -79,8 +113,29 @@ function ExternalsMap({
   const [layersOpen, setLayersOpen] = useState(false)
   const [importing, setImporting] = useState(false)
   const [target, setTarget] = useState<MapCameraTarget | null>(null)
+  const [trackingOpen, setTrackingOpen] = useState(() => window.matchMedia(WIDE_SCREEN).matches)
+  const orders = useWorkOrders()
+  const crews = useCrews()
 
   useEffect(() => preferences.saveLayers(layers), [layers, preferences])
+
+  const crewById = useMemo(() => new Map((crews.data ?? []).map((crew) => [crew.id, crew])), [crews.data])
+  const placeOrders = useMemo(() => ordersByPlace(map.places, orders.data ?? []), [map.places, orders.data])
+  const placeColors = useMemo(() => {
+    const colors = new Map<string, string>()
+    for (const [placeId, list] of placeOrders) {
+      const state = activeStateOf(list)
+      const color = state ? STATE_MARKER_COLOR[state] : undefined
+      if (color) colors.set(placeId, color)
+    }
+    return colors
+  }, [placeOrders])
+  const placeIdByOrder = useMemo(() => {
+    const index = new Map<string, string>()
+    for (const [placeId, list] of placeOrders) for (const order of list) index.set(order.id, placeId)
+    return index
+  }, [placeOrders])
+  const activeOrders = useMemo(() => (orders.data ?? []).filter(isActiveOrder), [orders.data])
 
   // Al cambiar el mapa (otra versión o importación) la selección deja de tener sentido.
   const [shownMap, setShownMap] = useState(map)
@@ -110,8 +165,13 @@ function ExternalsMap({
 
   const selectedPlace = map.places.find((place) => place.id === selectedPlaceId) ?? null
 
+  const selectPlace = (placeId: string) => {
+    setSelectedPlaceId(placeId)
+    if (!window.matchMedia(WIDE_SCREEN).matches) setTrackingOpen(false)
+  }
+
   const focusPlace = (place: MapPlace) => {
-    setSelectedPlaceId(place.id)
+    selectPlace(place.id)
     setQuery('')
     setTarget((prev) => ({
       key: (prev?.key ?? 0) + 1,
@@ -180,7 +240,8 @@ function ExternalsMap({
         linesVisible={layers.linesVisible}
         selectedPlaceId={selectedPlaceId}
         target={target}
-        onSelectPlace={setSelectedPlaceId}
+        onSelectPlace={selectPlace}
+        placeColors={placeColors}
       />
 
       <div className="externals__top">
@@ -217,6 +278,16 @@ function ExternalsMap({
           ) : null}
         </div>
         <div className="externals__actions">
+          <button
+            type="button"
+            className={`externals__tracking-toggle${trackingOpen ? ' is-on' : ''}`}
+            aria-pressed={trackingOpen}
+            onClick={() => setTrackingOpen((value) => !value)}
+          >
+            <ClipboardList />
+            <span>Seguimiento</span>
+            {activeOrders.length > 0 ? <span className="externals__count">{activeOrders.length}</span> : null}
+          </button>
           <IconButton label="Capas" onClick={() => setLayersOpen(true)}>
             <Layers />
           </IconButton>
@@ -292,7 +363,30 @@ function ExternalsMap({
         </div>
       ) : null}
 
-      {selectedPlace ? <PlaceCard place={selectedPlace} onClose={() => setSelectedPlaceId(null)} /> : null}
+      {trackingOpen ? (
+        <TrackingPanel
+          orders={activeOrders}
+          loading={orders.isPending}
+          crewById={crewById}
+          belowFronts={fronts.length > 0}
+          selectedPlaceId={selectedPlaceId}
+          placeIdOf={(order) => placeIdByOrder.get(order.id) ?? null}
+          onFocus={(placeId) => {
+            const place = map.places.find((item) => item.id === placeId)
+            if (place) focusPlace(place)
+          }}
+          onClose={() => setTrackingOpen(false)}
+        />
+      ) : null}
+
+      {selectedPlace ? (
+        <PlaceCard
+          place={selectedPlace}
+          orders={placeOrders.get(selectedPlace.id) ?? []}
+          crewById={crewById}
+          onClose={() => setSelectedPlaceId(null)}
+        />
+      ) : null}
 
       <Dialog open={layersOpen} onClose={() => setLayersOpen(false)} title="Capas" icon={<Layers />}>
         <div className="stack">
@@ -337,9 +431,150 @@ function ExternalsMap({
   )
 }
 
-function PlaceCard({ place, onClose }: { place: MapPlace; onClose: () => void }) {
+const TRACKING_FILTERS: readonly { key: TrackingFilter; label: string }[] = [
+  { key: 'ALL', label: 'Activas' },
+  { key: 'IN_PROGRESS', label: 'En progreso' },
+  { key: 'ASSIGNED', label: 'Asignadas' },
+  { key: 'DRAFT', label: 'Borradores' },
+]
+
+function TrackingPanel({
+  orders,
+  loading,
+  crewById,
+  belowFronts,
+  selectedPlaceId,
+  placeIdOf,
+  onFocus,
+  onClose,
+}: {
+  orders: readonly WorkOrder[]
+  loading: boolean
+  crewById: ReadonlyMap<string, Crew>
+  belowFronts: boolean
+  selectedPlaceId: string | null
+  placeIdOf: (order: WorkOrder) => string | null
+  onFocus: (placeId: string) => void
+  onClose: () => void
+}) {
+  const navigate = useNavigate()
+  const [filter, setFilter] = useState<TrackingFilter>('ALL')
+  const sorted = useMemo(
+    () =>
+      [...orders].sort(
+        (a, b) =>
+          ACTIVE_STATES.indexOf(a.state) - ACTIVE_STATES.indexOf(b.state) ||
+          (b.assignedAt ?? b.createdAt).localeCompare(a.assignedAt ?? a.createdAt),
+      ),
+    [orders],
+  )
+  const visible = filter === 'ALL' ? sorted : sorted.filter((order) => order.state === filter)
+
+  return (
+    <aside className={`externals__tracking${belowFronts ? ' externals__tracking--low' : ''}`} aria-label="Seguimiento de OTs">
+      <header className="externals__tracking-head">
+        <div>
+          <h2>Seguimiento de OTs</h2>
+          <span>{plural(orders.length, 'orden abierta', 'órdenes abiertas')}</span>
+        </div>
+        <IconButton label="Cerrar seguimiento" size="sm" onClick={onClose}>
+          <X />
+        </IconButton>
+      </header>
+
+      <div className="externals__tracking-tabs" role="tablist">
+        {TRACKING_FILTERS.map((item) => {
+          const count = item.key === 'ALL' ? orders.length : orders.filter((order) => order.state === item.key).length
+          const tone = item.key === 'ALL' ? 'accent' : STATE_TONE[item.key]
+          return (
+            <button
+              key={item.key}
+              type="button"
+              role="tab"
+              aria-selected={filter === item.key}
+              className={`externals__tab externals__tab--${tone}`}
+              onClick={() => setFilter(item.key)}
+            >
+              {item.label}
+              <span>{count}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="externals__tracking-list">
+        {loading ? <Loading /> : null}
+        {!loading && visible.length === 0 ? (
+          <p className="externals__tracking-empty">
+            {orders.length === 0 ? 'No hay órdenes abiertas. Selecciona un punto para asignar una OT.' : 'No hay órdenes en este estado.'}
+          </p>
+        ) : null}
+        {visible.map((order) => {
+          const placeId = placeIdOf(order)
+          const crew = order.crewId ? crewById.get(order.crewId) : undefined
+          const tone = STATE_TONE[order.state]
+          const priority = maxPriority(order.items)
+          return (
+            <div
+              key={order.id}
+              className={`externals__ot externals__ot--${tone}${placeId && placeId === selectedPlaceId ? ' is-selected' : ''}`}
+            >
+              <button
+                type="button"
+                className="externals__ot-main"
+                disabled={!placeId}
+                title={placeId ? 'Ver en el mapa' : 'El punto no está en el mapa actual'}
+                onClick={() => placeId && onFocus(placeId)}
+              >
+                <span className="externals__ot-top">
+                  <span className="externals__ot-number">{order.externalNumber || '—'}</span>
+                  <span className={`tone-pill tone-pill--dot tone-pill--${tone}`}>{workOrderStateLabel(order.state)}</span>
+                  {priority ? <span className={`tone-pill tone-pill--${priorityTone(priority)}`}>{priority}</span> : null}
+                </span>
+                <span className="externals__ot-place">
+                  <MapPin aria-hidden />
+                  {order.place?.name || 'Sin ubicación'}
+                </span>
+                <span className="externals__ot-meta">
+                  {crew ? <span className="plate-tag">{formatPlate(crew.vehiclePlate)}</span> : <span>Sin cuadrilla</span>}
+                  <span>{formatDateTime(order.assignedAt ?? order.createdAt)}</span>
+                </span>
+              </button>
+              <IconButton label={`Abrir OT ${order.externalNumber}`} size="sm" onClick={() => navigate(routes.workOrder(order.id))}>
+                <ChevronRight />
+              </IconButton>
+            </div>
+          )
+        })}
+      </div>
+
+      <footer className="externals__legend">
+        <span style={{ '--dot': STATE_MARKER_COLOR.IN_PROGRESS } as CSSProperties}>En progreso</span>
+        <span style={{ '--dot': STATE_MARKER_COLOR.ASSIGNED } as CSSProperties}>Asignada</span>
+        <span style={{ '--dot': STATE_MARKER_COLOR.DRAFT } as CSSProperties}>Borrador</span>
+        <span style={{ '--dot': '#00D6A0' } as CSSProperties}>Sin OT abierta</span>
+      </footer>
+    </aside>
+  )
+}
+
+const PLACE_HISTORY_LIMIT = 5
+
+function PlaceCard({
+  place,
+  orders,
+  crewById,
+  onClose,
+}: {
+  place: MapPlace
+  orders: readonly WorkOrder[]
+  crewById: ReadonlyMap<string, Crew>
+  onClose: () => void
+}) {
   const navigate = useNavigate()
   const isAdmin = useIsAdmin()
+  const activeState = activeStateOf(orders)
+  const shownOrders = orders.slice(0, PLACE_HISTORY_LIMIT)
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${place.latitude},${place.longitude}`
   const previewUrl = place.documentation ? drivePreviewUrl(place.documentation) : null
   const externalNumber = externalNumberFromPlaceName(place.name)
@@ -356,13 +591,15 @@ function PlaceCard({ place, onClose }: { place: MapPlace; onClose: () => void })
     navigate(`${routes.workOrderNew}?${params.toString()}`)
   }
 
+  const tone = activeState ? STATE_TONE[activeState] : 'accent'
+
   return (
-    <aside className="externals__place card" aria-label={`Detalle de ${place.name}`}>
+    <aside className={`externals__place externals__place--${tone}`} aria-label={`Detalle de ${place.name}`}>
       <div className="externals__place-head">
-        <span className="icon-badge icon-badge--hi">
+        <span className="externals__place-icon">
           <MapPin />
         </span>
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="externals__place-title">
           <h3>{place.name || 'Sin nombre'}</h3>
           <span className="mono muted" style={{ fontSize: '0.75rem' }}>
             {place.latitude.toFixed(6)}, {place.longitude.toFixed(6)}
@@ -372,26 +609,65 @@ function PlaceCard({ place, onClose }: { place: MapPlace; onClose: () => void })
           <X />
         </IconButton>
       </div>
+
+      <div className="externals__place-status">
+        {activeState ? (
+          <span className={`tone-pill tone-pill--dot tone-pill--${tone}`}>OT {workOrderStateLabel(activeState).toLowerCase()}</span>
+        ) : (
+          <span className="tone-pill tone-pill--accent">Sin OT abierta</span>
+        )}
+        {externalNumber ? <span className="tone-pill tone-pill--neutral">Externo {externalNumber}</span> : null}
+      </div>
+
       {place.description ? <p className="externals__place-text">{place.description}</p> : null}
-      <div className="row" style={{ justifyContent: 'flex-end', flexWrap: 'wrap', gap: 4 }}>
+
+      <div className="externals__history">
+        <span className="externals__history-title">
+          Órdenes del punto <span>{orders.length}</span>
+        </span>
+        {orders.length === 0 ? (
+          <p className="externals__history-empty">Este punto aún no tiene órdenes.</p>
+        ) : (
+          <ul>
+            {shownOrders.map((order) => {
+              const crew = order.crewId ? crewById.get(order.crewId) : undefined
+              const orderTone = STATE_TONE[order.state]
+              return (
+                <li key={order.id}>
+                  <button
+                    type="button"
+                    className={`externals__history-row externals__history-row--${orderTone}`}
+                    onClick={() => navigate(routes.workOrder(order.id))}
+                  >
+                    <span className={`tone-pill tone-pill--dot tone-pill--${orderTone}`}>{workOrderStateLabel(order.state)}</span>
+                    <span className="externals__history-when">{formatDateTime(order.closedAt ?? order.assignedAt ?? order.createdAt)}</span>
+                    {crew ? <span className="plate-tag">{formatPlate(crew.vehiclePlate)}</span> : null}
+                    <ChevronRight aria-hidden />
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+        {orders.length > shownOrders.length ? (
+          <span className="externals__history-more">y {orders.length - shownOrders.length} más</span>
+        ) : null}
+      </div>
+
+      <div className="externals__place-actions">
         {isAdmin ? (
-          <Button variant="text" size="sm" icon={<ClipboardList />} onClick={assignOt}>
+          <Button icon={<ClipboardPlus />} onClick={assignOt}>
             Asignar OT
           </Button>
         ) : null}
+        <Button variant="tonal" size="sm" icon={<ExternalLink />} onClick={() => window.open(mapsUrl, '_blank', 'noopener,noreferrer')}>
+          Maps
+        </Button>
         {place.documentation ? (
           <Button variant="text" size="sm" icon={<FileText />} onClick={openDocumentation}>
-            Ver documentación
+            Documentación
           </Button>
         ) : null}
-        <Button
-          variant="text"
-          size="sm"
-          icon={<ExternalLink />}
-          onClick={() => window.open(mapsUrl, '_blank', 'noopener,noreferrer')}
-        >
-          Abrir en Google Maps
-        </Button>
       </div>
     </aside>
   )

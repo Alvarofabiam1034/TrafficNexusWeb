@@ -274,6 +274,8 @@ export interface DutyChecklistLineDto {
   brand?: string
   serial?: string
   mark?: string
+  /** Detalle opcional del hallazgo cuando mark = MISSING. */
+  comment?: string
   markedByName?: string
   openMark?: string
 }

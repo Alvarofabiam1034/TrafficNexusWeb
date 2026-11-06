@@ -47,6 +47,12 @@ import {
   validateInventoryItem,
 } from '@/domain/validation/inventoryValidator'
 import { Button, IconButton } from '@/presentation/components/Button'
+import {
+  CollapseAllBar,
+  CollapsibleGroup,
+  groupTone,
+  useCollapsedGroups,
+} from '@/presentation/components/CollapsibleGroup'
 import { Dialog } from '@/presentation/components/Dialog'
 import { SelectField, TextField } from '@/presentation/components/Field'
 import { PageHeader } from '@/presentation/components/PageHeader'
@@ -63,6 +69,16 @@ export default function InventoryPage() {
   const openAdd = (groupName: string) => setAdding({ groupName, nonce: Date.now() })
 
   const totalItems = useMemo(() => (inventory.data ?? []).reduce((sum, group) => sum + group.items.length, 0), [inventory.data])
+  const collapse = useCollapsedGroups('tn.inventory.collapsed')
+  const groupIds = useMemo(() => (inventory.data ?? []).map((group) => group.id), [inventory.data])
+  const kindCounts = useMemo(() => {
+    const groups = inventory.data ?? []
+    return {
+      tool: groups.filter((group) => group.kind === 'TOOL').length,
+      consumable: groups.filter((group) => group.kind === 'CONSUMABLE').length,
+      untyped: groups.filter((group) => !group.kind).length,
+    }
+  }, [inventory.data])
 
   return (
     <>
@@ -97,19 +113,40 @@ export default function InventoryPage() {
           />
         ) : null}
         {inventory.data && inventory.data.length > 0 ? (
-          <div className="inventory-grid">
-            {inventory.data.map((group, index) => (
-              <GroupCard
-                key={group.id}
-                group={group}
-                groups={inventory.data}
-                isAdmin={isAdmin}
-                isFirst={index === 0}
-                isLast={index === inventory.data.length - 1}
-                onAddItem={() => openAdd(group.name)}
-              />
-            ))}
-          </div>
+          <>
+            <CollapseAllBar ids={groupIds} isCollapsed={collapse.isCollapsed} setAll={collapse.setAll}>
+              {kindCounts.tool > 0 ? (
+                <span className="cgroup-stat cgroup-stat--tool">
+                  <Wrench size={14} /> <strong>{kindCounts.tool}</strong> {kindCounts.tool === 1 ? 'herramienta' : 'herramientas'}
+                </span>
+              ) : null}
+              {kindCounts.consumable > 0 ? (
+                <span className="cgroup-stat cgroup-stat--consumable">
+                  <Boxes size={14} /> <strong>{kindCounts.consumable}</strong> {kindCounts.consumable === 1 ? 'consumible' : 'consumibles'}
+                </span>
+              ) : null}
+              {kindCounts.untyped > 0 ? (
+                <span className="cgroup-stat cgroup-stat--untyped">
+                  <Tag size={14} /> <strong>{kindCounts.untyped}</strong> sin tipo
+                </span>
+              ) : null}
+            </CollapseAllBar>
+            <div className="cgroup-grid">
+              {inventory.data.map((group, index) => (
+                <GroupCard
+                  key={group.id}
+                  group={group}
+                  groups={inventory.data}
+                  isAdmin={isAdmin}
+                  isFirst={index === 0}
+                  isLast={index === inventory.data.length - 1}
+                  collapsed={collapse.isCollapsed(group.id)}
+                  onToggle={() => collapse.toggle(group.id)}
+                  onAddItem={() => openAdd(group.name)}
+                />
+              ))}
+            </div>
+          </>
         ) : null}
       </div>
 
@@ -138,6 +175,8 @@ function GroupCard({
   isAdmin,
   isFirst,
   isLast,
+  collapsed,
+  onToggle,
   onAddItem,
 }: {
   group: InventoryGroup
@@ -145,6 +184,8 @@ function GroupCard({
   isAdmin: boolean
   isFirst: boolean
   isLast: boolean
+  collapsed: boolean
+  onToggle: () => void
   onAddItem: () => void
 }) {
   const toast = useToast()
@@ -206,89 +247,100 @@ function GroupCard({
   }
 
   return (
-    <article className="card inventory-group">
-      <div className="inventory-group__head">
-        <span className="icon-badge icon-badge--hi">{group.kind === 'TOOL' ? <Wrench /> : <Boxes />}</span>
-        {renaming ? (
-          <form className="inventory-group__rename" onSubmit={submitRename}>
-            <TextField
-              label="Nombre del grupo"
-              value={newName}
-              maxLength={INVENTORY_MAX_GROUP_LENGTH}
-              autoFocus
-              onChange={(event) => setNewName(event.target.value)}
-              error={renameError ? inventoryErrorText(renameError, 'group') : null}
-            />
-            <IconButton label="Guardar nombre" type="submit" size="sm" accent disabled={update.isPending}>
-              <Check />
-            </IconButton>
-            <IconButton label="Cancelar" size="sm" onClick={() => setRenaming(false)}>
-              <X />
-            </IconButton>
-          </form>
-        ) : (
-          <div className="inventory-group__title">
-            <h3>{group.name}</h3>
-            <div className="row" style={{ gap: 6 }}>
-              {group.kind ? (
-                <span className={`badge ${group.kind === 'TOOL' ? 'badge--primary' : 'badge--accent'}`}>{kindLabel[group.kind]}</span>
-              ) : (
-                <button type="button" className="badge badge--caution inventory-group__define" onClick={() => isAdmin && setKindDialog(true)}>
-                  <Tag size={12} /> {isAdmin ? 'Definir tipo' : 'Sin tipo'}
-                </button>
-              )}
-              <span className="muted" style={{ fontSize: '0.8125rem' }}>
-                {plural(group.items.length, 'ítem', 'ítems')}
+    <>
+      <CollapsibleGroup
+        tone={groupTone(group.kind)}
+        icon={group.kind === 'TOOL' ? <Wrench /> : <Boxes />}
+        title={group.name}
+        collapsed={collapsed}
+        onToggle={onToggle}
+        meta={
+          <>
+            {group.kind ? (
+              <span className="cgroup-kind">{kindLabel[group.kind]}</span>
+            ) : !isAdmin ? (
+              <span className="cgroup-kind">
+                <Tag /> Sin tipo
               </span>
-            </div>
-          </div>
-        )}
-        {isAdmin && !renaming ? (
-          <div ref={menuRef} style={{ position: 'relative' }}>
-            <IconButton label="Opciones del grupo" size="sm" onClick={() => setMenuOpen((value) => !value)}>
-              <MoreVertical />
-            </IconButton>
-            {menuOpen ? (
-              <div className="menu" role="menu">
-                <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); onAddItem() }}>
-                  <Plus /> Agregar ítem
-                </button>
-                <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); setNewName(group.name); setRenaming(true) }}>
-                  <Pencil /> Renombrar
-                </button>
-                <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); setKindDialog(true) }}>
-                  <Tag /> {group.kind ? 'Cambiar tipo' : 'Definir tipo'}
-                </button>
-                <button type="button" role="menuitem" disabled={isFirst || move.isPending} onClick={() => { setMenuOpen(false); void move.mutateAsync({ groupId: group.id, delta: -1 }) }}>
-                  <ArrowUp /> Subir
-                </button>
-                <button type="button" role="menuitem" disabled={isLast || move.isPending} onClick={() => { setMenuOpen(false); void move.mutateAsync({ groupId: group.id, delta: 1 }) }}>
-                  <ArrowDown /> Bajar
-                </button>
-                <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); setConfirmDelete(true) }}>
-                  <Trash2 /> Eliminar grupo
-                </button>
-              </div>
             ) : null}
-          </div>
-        ) : null}
-      </div>
-      <hr className="card__divider" />
-      {group.items.length === 0 ? (
-        <div className="inventory-empty">Sin ítems</div>
-      ) : (
-        group.items.map((item, index) => (
-          <ItemRow
-            key={item.id}
-            item={item}
-            group={group}
-            groups={groups}
-            isAdmin={isAdmin}
-            isFirst={index === 0}
-            isLast={index === group.items.length - 1}
-          />
-        ))
-      )}
+            <span className="cgroup-count">{plural(group.items.length, 'ítem', 'ítems')}</span>
+          </>
+        }
+        editor={
+          renaming ? (
+            <form className="inventory-group__rename" onSubmit={submitRename}>
+              <TextField
+                label="Nombre del grupo"
+                value={newName}
+                maxLength={INVENTORY_MAX_GROUP_LENGTH}
+                autoFocus
+                onChange={(event) => setNewName(event.target.value)}
+                error={renameError ? inventoryErrorText(renameError, 'group') : null}
+              />
+              <IconButton label="Guardar nombre" type="submit" size="sm" accent disabled={update.isPending}>
+                <Check />
+              </IconButton>
+              <IconButton label="Cancelar" size="sm" onClick={() => setRenaming(false)}>
+                <X />
+              </IconButton>
+            </form>
+          ) : undefined
+        }
+        actions={
+          isAdmin && !renaming ? (
+            <>
+              {!group.kind ? (
+                <button type="button" className="cgroup-kind" onClick={() => setKindDialog(true)}>
+                  <Tag /> Definir tipo
+                </button>
+              ) : null}
+              <div ref={menuRef} style={{ position: 'relative' }}>
+                <IconButton label="Opciones del grupo" size="sm" onClick={() => setMenuOpen((value) => !value)}>
+                  <MoreVertical />
+                </IconButton>
+                {menuOpen ? (
+                  <div className="menu" role="menu">
+                    <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); onAddItem() }}>
+                      <Plus /> Agregar ítem
+                    </button>
+                    <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); setNewName(group.name); setRenaming(true) }}>
+                      <Pencil /> Renombrar
+                    </button>
+                    <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); setKindDialog(true) }}>
+                      <Tag /> {group.kind ? 'Cambiar tipo' : 'Definir tipo'}
+                    </button>
+                    <button type="button" role="menuitem" disabled={isFirst || move.isPending} onClick={() => { setMenuOpen(false); void move.mutateAsync({ groupId: group.id, delta: -1 }) }}>
+                      <ArrowUp /> Subir
+                    </button>
+                    <button type="button" role="menuitem" disabled={isLast || move.isPending} onClick={() => { setMenuOpen(false); void move.mutateAsync({ groupId: group.id, delta: 1 }) }}>
+                      <ArrowDown /> Bajar
+                    </button>
+                    <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); setConfirmDelete(true) }}>
+                      <Trash2 /> Eliminar grupo
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </>
+          ) : undefined
+        }
+      >
+        {group.items.length === 0 ? (
+          <div className="inventory-empty">Sin ítems</div>
+        ) : (
+          group.items.map((item, index) => (
+            <ItemRow
+              key={item.id}
+              item={item}
+              group={group}
+              groups={groups}
+              isAdmin={isAdmin}
+              isFirst={index === 0}
+              isLast={index === group.items.length - 1}
+            />
+          ))
+        )}
+      </CollapsibleGroup>
 
       <Dialog
         open={kindDialog}
@@ -350,7 +402,7 @@ function GroupCard({
       >
         <p className="dialog__text">Algún vehículo tiene ítems de «{group.name}» con cantidad mayor que cero. Déjalos en cero y vuelve a intentarlo.</p>
       </Dialog>
-    </article>
+    </>
   )
 }
 
@@ -419,7 +471,7 @@ function ItemRow({
 
   if (editing) {
     return (
-      <form className="inventory-item inventory-item--editing" onSubmit={submit}>
+      <form className="inventory-item inventory-item--editing cgroup-row" onSubmit={submit}>
         <div className="inventory-item__edit-fields">
           <TextField
             label="Nombre del ítem"
@@ -452,7 +504,7 @@ function ItemRow({
   }
 
   return (
-    <div className="inventory-item">
+    <div className="inventory-item cgroup-row">
       <span className="inventory-item__name">
         <span className="inventory-item__label">{item.name}</span>
         <span className="inventory-item__unit" title={unitLabel[item.unit]}>

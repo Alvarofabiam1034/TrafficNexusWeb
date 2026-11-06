@@ -16,6 +16,15 @@
   position: relative;
 }
 
+/* Color por sección */
+.shell__link--accent { --nav: var(--tone-accent); }
+.shell__link--info { --nav: var(--tone-info); }
+.shell__link--caution { --nav: var(--tone-caution); }
+.shell__link--success { --nav: var(--tone-success); }
+.shell__link--orange { --nav: var(--tone-orange); }
+.shell__link--violet { --nav: #b39dff; }
+.shell__link--neutral { --nav: var(--tone-neutral); }
+
 /* ----- Barra inferior (móvil), espejo de la app ----- */
 .shell__bottom {
   display: flex;
@@ -27,6 +36,7 @@
 
 .shell__tab {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -38,11 +48,19 @@
   text-decoration: none;
 }
 
+.shell__tab > span:last-child {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .shell__tab-indicator {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 56px;
+  width: 52px;
   height: 30px;
   border-radius: 999px;
   transition: background-color 120ms ease;
@@ -54,11 +72,27 @@
 }
 
 .shell__tab.active {
-  color: var(--brand-accent);
+  color: var(--nav, var(--brand-accent));
 }
 
 .shell__tab.active .shell__tab-indicator {
-  background: rgba(0, 214, 160, 0.18);
+  background: color-mix(in srgb, var(--nav, var(--brand-accent)) 18%, transparent);
+}
+
+.shell__tab-badge {
+  position: absolute;
+  top: -2px;
+  right: 4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  font-size: 0.625rem;
+  font-weight: 700;
+  background: var(--tone-info);
+  color: var(--brand-text);
 }
 
 /* ----- Escritorio: barra lateral ----- */
@@ -73,23 +107,27 @@
   }
 
   .shell__sidebar {
+    position: relative;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 14px;
     padding: 16px 12px;
-    background: var(--logo-ink);
-    border-right: 1px solid var(--outline-variant);
     min-height: 0;
+    overflow-y: auto;
+    background:
+      radial-gradient(140% 40% at 0% 0%, rgba(0, 214, 160, 0.08) 0%, transparent 60%),
+      linear-gradient(180deg, var(--logo-ink) 0%, #0b1017 100%);
+    border-right: 1px solid var(--outline-variant);
   }
 
   .shell__brand {
     display: flex;
     align-items: center;
     justify-content: center;
+    flex: none;
     height: 72px;
     overflow: hidden;
     border-radius: var(--radius-md);
-    background: var(--logo-ink);
   }
 
   .shell__brand img {
@@ -101,43 +139,124 @@
   .shell__nav {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 16px;
     flex: 1;
   }
 
+  .shell__section {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .shell__section-title {
+    padding: 0 12px 6px;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: color-mix(in srgb, var(--fg-muted) 70%, transparent);
+  }
+
   .shell__link {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 12px;
     height: 44px;
-    padding: 0 14px;
+    padding: 0 10px 0 8px;
     border-radius: var(--radius-sm);
     color: var(--fg-muted);
     font-weight: 500;
+    text-decoration: none;
     transition:
-      background-color 120ms ease,
-      color 120ms ease;
+      background-color 150ms ease,
+      color 150ms ease;
   }
 
-  .shell__link svg {
-    width: 20px;
-    height: 20px;
+  .shell__link-icon {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    color: var(--nav);
+    background: color-mix(in srgb, var(--nav) 10%, transparent);
+    transition: background-color 150ms ease, box-shadow 150ms ease, color 150ms ease;
+  }
+
+  .shell__link-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .shell__link-label {
+    flex: 1;
+    min-width: 0;
   }
 
   .shell__link:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.04);
     color: var(--fg);
   }
 
+  .shell__link:hover .shell__link-icon {
+    background: color-mix(in srgb, var(--nav) 18%, transparent);
+  }
+
   .shell__link.active {
-    background: rgba(0, 214, 160, 0.14);
-    color: var(--brand-accent);
+    color: var(--fg);
+    font-weight: 600;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--nav) 18%, transparent), color-mix(in srgb, var(--nav) 4%, transparent));
+  }
+
+  .shell__link.active::before {
+    content: '';
+    position: absolute;
+    left: -12px;
+    top: 8px;
+    bottom: 8px;
+    width: 4px;
+    border-radius: 0 4px 4px 0;
+    background: var(--nav);
+    box-shadow: 0 0 12px var(--nav);
+  }
+
+  .shell__link.active .shell__link-icon {
+    color: var(--brand-text);
+    background: var(--nav);
+    box-shadow: 0 4px 14px -4px var(--nav);
+  }
+
+  .shell__link:focus-visible {
+    outline: 2px solid var(--nav);
+    outline-offset: 1px;
+  }
+
+  .shell__badge {
+    min-width: 22px;
+    height: 20px;
+    padding: 0 6px;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: var(--nav);
+    background: color-mix(in srgb, var(--nav) 18%, transparent);
+  }
+
+  .shell__link.active .shell__badge {
+    color: var(--brand-text);
+    background: var(--nav);
   }
 }
 
 /* ----- Selector de proyecto ----- */
 .shell__project {
   position: relative;
+  flex: none;
 }
 
 .shell__project-btn {
@@ -145,14 +264,18 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  height: 44px;
-  padding: 0 12px;
+  padding: 8px 12px 8px 8px;
   border-radius: var(--radius-sm);
-  background: var(--surface);
-  border: 1px solid var(--outline-variant);
+  background: linear-gradient(135deg, rgba(0, 214, 160, 0.1), rgba(67, 85, 112, 0.25));
+  border: 1px solid color-mix(in srgb, var(--brand-accent) 25%, var(--outline-variant));
   color: var(--fg);
   font-weight: 500;
   text-align: left;
+  transition: border-color 150ms ease;
+}
+
+.shell__project-btn:hover:not(:disabled) {
+  border-color: var(--brand-accent);
 }
 
 .shell__project-btn:disabled {
@@ -160,23 +283,50 @@
   cursor: default;
 }
 
-.shell__project-btn svg {
+.shell__project-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--tone-accent-bg);
+  color: var(--brand-accent);
+}
+
+.shell__project-icon svg {
   width: 18px;
   height: 18px;
+}
+
+.shell__project-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.shell__project-label {
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   color: var(--brand-accent);
-  flex: none;
 }
 
 .shell__project-name {
-  flex: 1;
-  min-width: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .shell__project-chevron {
-  color: var(--fg-muted) !important;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: var(--fg-muted);
 }
 
 .shell__project-menu {
@@ -194,9 +344,10 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  flex: none;
   padding: 10px;
-  border-radius: var(--radius-sm);
-  background: var(--surface);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--outline-variant);
 }
 
@@ -204,14 +355,15 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
-  background: var(--brand-primary);
-  color: var(--brand-canvas);
-  font-weight: 600;
+  background: linear-gradient(135deg, var(--brand-accent), var(--brand-primary));
+  color: var(--brand-text);
+  font-weight: 700;
   font-size: 0.8125rem;
   flex: none;
+  box-shadow: 0 0 0 2px var(--logo-ink), 0 0 0 3px color-mix(in srgb, var(--brand-accent) 50%, transparent);
 }
 
 .shell__user-text {
@@ -221,7 +373,7 @@
 
 .shell__user-name {
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -230,4 +382,8 @@
 .shell__user-role {
   font-size: 0.75rem;
   color: var(--fg-muted);
+}
+
+.shell__user .icon-btn:hover {
+  color: var(--tone-danger);
 }

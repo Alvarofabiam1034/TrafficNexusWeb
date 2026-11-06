@@ -276,6 +276,15 @@ export function shiftsForCard(shifts: readonly CrewShift[], todayDate: CivilDate
   return [...habitual, ...upcoming]
 }
 
+/** La cuadrilla tiene un turno que cubre `now` (incluye el nocturno que viene de ayer). */
+export function isOnShiftAt(crew: Crew, now: Date): boolean {
+  const day = civilDate(now.getFullYear(), now.getMonth() + 1, now.getDate())
+  const minute = toEpochDay(day) * MINUTES_PER_DAY + now.getHours() * 60 + now.getMinutes()
+  return materialize([crew], { from: plusDays(day, -1), until: day, includeDated: true, applyHoliday: true }).some(
+    (span) => span.startMinute <= minute && minute < span.endMinute,
+  )
+}
+
 /** Qué parte del día (0..1) ocupa un intervalo absoluto. Nulo si no toca ese día. */
 export function portionOnDay(
   startMinute: number,

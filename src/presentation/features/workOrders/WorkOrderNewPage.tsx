@@ -1,5 +1,5 @@
-import { ClipboardPaste, ExternalLink, MapPin, Plus, Trash2 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { Check, ClipboardPaste, ExternalLink, MapPin, PencilLine, Plus, Trash2, TriangleAlert } from 'lucide-react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { useIsAdmin } from '@/application/ContainerContext'
@@ -11,15 +11,19 @@ import {
   useUpdateWorkOrder,
 } from '@/application/hooks/useWorkOrders'
 import { DomainError, messageOf } from '@/domain/errors'
+import type { Crew } from '@/domain/model/crew'
 import type { WorkOrderItemInput } from '@/domain/model/workOrder'
+import { isOnShiftAt } from '@/domain/schedule/scheduleRules'
 import { formatPlate } from '@/domain/validation/crewValidator'
 import { routes } from '@/presentation/app/routes'
 import { Button, IconButton } from '@/presentation/components/Button'
-import { TextAreaField, TextField, SelectField } from '@/presentation/components/Field'
+import { TextAreaField, TextField } from '@/presentation/components/Field'
 import { PageHeader } from '@/presentation/components/PageHeader'
 import { EmptyState, InlineMessage, Loading } from '@/presentation/components/States'
 import { useToast } from '@/presentation/components/Toast'
+import { useNow } from '@/presentation/components/useNow'
 
+import { priorityTone } from './workOrderTone'
 import './workOrders.css'
 
 const emptyItem = (): WorkOrderItemInput => ({
@@ -49,6 +53,7 @@ export default function WorkOrderNewPage() {
 function WorkOrderNewForm({ placeId }: { placeId: string }) {
   const navigate = useNavigate()
   const toast = useToast()
+  const now = useNow()
   const [params] = useSearchParams()
   const presetExternal = params.get('external')?.trim() ?? ''
   const placeName = params.get('placeName')?.trim() ?? ''
@@ -105,6 +110,11 @@ function WorkOrderNewForm({ placeId }: { placeId: string }) {
     } catch (error) {
       toast.error(messageOf(error, 'No se pudo analizar el mensaje'))
     }
+  }
+
+  const fillManually = () => {
+    if (items.length === 0) setItems([emptyItem()])
+    setExtracted(true)
   }
 
   const updateItem = (index: number, patch: Partial<WorkOrderItemInput>) => {
@@ -166,48 +176,19 @@ function WorkOrderNewForm({ placeId }: { placeId: string }) {
     }
   }
 
+  const crewList = crews.data ?? []
+  const selectedCrew = crewList.find((crew) => crew.id === crewId)
+  const selectedOffShift = selectedCrew ? !isOnShiftAt(selectedCrew, now) : false
+  const dataDone = extracted && !externalError
+
   return (
     <>
       <PageHeader
         title="Nueva orden"
-        subtitle={
-          placeName
-            ? `${placeName} · pega el reporte y asigna cuadrilla`
-            : presetExternal
-              ? `Externo ${presetExternal} · pega el reporte y asigna cuadrilla`
-              : 'Pega el reporte de WhatsApp y asígnalo'
-        }
+        subtitle={placeName ? `${placeName} · pega el reporte y asigna cuadrilla` : 'Pega el reporte de WhatsApp y asígnalo'}
         backTo={routes.externals}
       />
       <div className="page-body">
-        <div className="ot-place-banner">
-          <span className="icon-badge icon-badge--hi">
-            <MapPin size={18} />
-          </span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="ot-place-banner__title">{placeName || 'Punto del mapa'}</div>
-            {latitude !== null && longitude !== null ? (
-              <div className="mono muted" style={{ fontSize: '0.75rem' }}>
-                {latitude.toFixed(6)}, {longitude.toFixed(6)}
-              </div>
-            ) : (
-              <div className="muted" style={{ fontSize: '0.75rem' }}>
-                Anclada al place del mapa vigente
-              </div>
-            )}
-          </div>
-          {mapsUrl ? (
-            <Button
-              variant="text"
-              size="sm"
-              icon={<ExternalLink />}
-              onClick={() => window.open(mapsUrl, '_blank', 'noopener,noreferrer')}
-            >
-              Maps
-            </Button>
-          ) : null}
-        </div>
-
         {crews.isPending ? <Loading /> : null}
         {crews.data && crews.data.length === 0 ? (
           <EmptyState
@@ -222,162 +203,253 @@ function WorkOrderNewForm({ placeId }: { placeId: string }) {
           />
         ) : null}
 
-        {crews.data && crews.data.length > 0 ? (
-          <div className="ot-form">
-            <TextAreaField
-              label="Mensaje de WhatsApp"
-              hint="Copia el reporte tal como llegó al chat"
-              value={rawMessage}
-              onChange={(event) => setRawMessage(event.target.value)}
-              rows={8}
-              placeholder="🔔 Cordial saludo. El externo…"
-              disabled={workOrderId !== null}
-            />
-            <div className="ot-form__actions" style={{ justifyContent: 'flex-start' }}>
-              <Button
-                variant="outlined"
-                icon={<ClipboardPaste />}
-                onClick={() => void extract()}
-                disabled={!rawMessage.trim() || busy || workOrderId !== null}
-              >
-                Extraer datos
-              </Button>
-            </div>
-
-            {extracted ? (
-              <>
-                <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
-                  <div style={{ flex: '1 1 140px' }}>
-                    <TextField
-                      label="Externo"
-                      value={externalNumber}
-                      onChange={(event) => setExternalNumber(event.target.value)}
-                      error={touched ? externalError : null}
-                      inputMode="numeric"
-                    />
-                  </div>
-                  <div style={{ flex: '1 1 180px' }}>
-                    <TextField
-                      label="Estado reportado"
-                      value={statusReported}
-                      onChange={(event) => setStatusReported(event.target.value)}
-                      placeholder="APAGADA"
-                    />
-                  </div>
-                </div>
-
-                <div className="ot-items">
-                  <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span className="label">IDs del reporte</span>
-                    <Button
-                      variant="text"
-                      size="sm"
-                      icon={<Plus />}
-                      onClick={() => setItems((current) => [...current, emptyItem()])}
-                    >
-                      Agregar ID
+        {crewList.length > 0 ? (
+          <div className="won">
+            <div className="won-main">
+              <Step number={1} title="Reporte de WhatsApp" done={extracted} hint="Copia el reporte tal como llegó al chat">
+                <TextAreaField
+                  label="Mensaje"
+                  value={rawMessage}
+                  onChange={(event) => setRawMessage(event.target.value)}
+                  rows={7}
+                  placeholder="🔔 Cordial saludo. El externo…"
+                  disabled={workOrderId !== null}
+                />
+                <div className="won-row">
+                  <Button
+                    icon={<ClipboardPaste />}
+                    onClick={() => void extract()}
+                    loading={parse.isPending}
+                    disabled={!rawMessage.trim() || busy || workOrderId !== null}
+                  >
+                    Extraer datos
+                  </Button>
+                  {!extracted ? (
+                    <Button variant="text" icon={<PencilLine />} onClick={fillManually}>
+                      Llenar a mano
                     </Button>
-                  </div>
-                  {items.map((item, index) => (
-                    <div key={index} className="ot-item">
-                      <div className="ot-item__head ot-item__wide">
-                        <strong>ID {item.externalId || index + 1}</strong>
-                        <IconButton
-                          label="Quitar ID"
-                          size="sm"
-                          onClick={() => setItems((current) => current.filter((_, i) => i !== index))}
-                        >
-                          <Trash2 />
-                        </IconButton>
-                      </div>
+                  ) : null}
+                </div>
+              </Step>
+
+              <Step
+                number={2}
+                title="Datos de la orden"
+                done={dataDone}
+                locked={!extracted}
+                hint={extracted ? 'Revisa lo extraído antes de asignar' : 'Se habilita al extraer el reporte'}
+              >
+                {extracted ? (
+                  <>
+                    <div className="won-grid-2">
                       <TextField
-                        label="ID"
-                        value={item.externalId}
-                        onChange={(event) => updateItem(index, { externalId: event.target.value })}
+                        label="Externo"
+                        value={externalNumber}
+                        onChange={(event) => setExternalNumber(event.target.value)}
+                        error={touched ? externalError : null}
+                        inputMode="numeric"
                       />
                       <TextField
-                        label="Prioridad"
-                        value={item.priority}
-                        onChange={(event) => updateItem(index, { priority: event.target.value })}
-                      />
-                      <TextField
-                        label="Equipo"
-                        value={item.equipment}
-                        onChange={(event) => updateItem(index, { equipment: event.target.value })}
-                      />
-                      <div className="ot-item__wide">
-                        <TextField
-                          label="Dirección"
-                          value={item.address}
-                          onChange={(event) => updateItem(index, { address: event.target.value })}
-                        />
-                      </div>
-                      <TextField
-                        label="Mantenimiento"
-                        value={item.maintenance}
-                        onChange={(event) => updateItem(index, { maintenance: event.target.value })}
+                        label="Estado reportado"
+                        value={statusReported}
+                        onChange={(event) => setStatusReported(event.target.value)}
+                        placeholder="APAGADA"
                       />
                     </div>
+
+                    <div className="won-items">
+                      <div className="won-items__head">
+                        <span>
+                          IDs del reporte <span className="won-count">{items.length}</span>
+                        </span>
+                        <Button variant="text" size="sm" icon={<Plus />} onClick={() => setItems((current) => [...current, emptyItem()])}>
+                          Agregar ID
+                        </Button>
+                      </div>
+                      {items.length === 0 ? <p className="won-muted">Sin IDs. Agrega uno si el reporte los trae.</p> : null}
+                      {items.map((item, index) => (
+                        <div key={index} className={`won-item won-item--${priorityTone(item.priority)}`}>
+                          <div className="won-item__head">
+                            <span className="wo-id">{item.externalId || `#${index + 1}`}</span>
+                            {item.priority ? (
+                              <span className={`tone-pill tone-pill--${priorityTone(item.priority)}`}>{item.priority}</span>
+                            ) : null}
+                            <IconButton
+                              label="Quitar ID"
+                              size="sm"
+                              danger
+                              onClick={() => setItems((current) => current.filter((_, i) => i !== index))}
+                            >
+                              <Trash2 />
+                            </IconButton>
+                          </div>
+                          <div className="won-item__fields">
+                            <TextField label="ID" value={item.externalId} onChange={(event) => updateItem(index, { externalId: event.target.value })} />
+                            <TextField label="Prioridad" value={item.priority} onChange={(event) => updateItem(index, { priority: event.target.value })} />
+                            <TextField label="Equipo" value={item.equipment} onChange={(event) => updateItem(index, { equipment: event.target.value })} />
+                            <TextField
+                              label="Mantenimiento"
+                              value={item.maintenance}
+                              onChange={(event) => updateItem(index, { maintenance: event.target.value })}
+                            />
+                            <div className="won-item__wide">
+                              <TextField label="Dirección" value={item.address} onChange={(event) => updateItem(index, { address: event.target.value })} />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <TextAreaField
+                      label="Contexto del reporte"
+                      hint="Texto de actividades / novedad"
+                      value={parsedNotes}
+                      onChange={(event) => setParsedNotes(event.target.value)}
+                      rows={4}
+                    />
+                    <TextAreaField
+                      label="Contexto adicional"
+                      hint="Notas tuyas para la cuadrilla (opcional)"
+                      value={adminNotes}
+                      onChange={(event) => setAdminNotes(event.target.value)}
+                      rows={3}
+                      placeholder="Ej. llevar módulo de repuesto, coordinar con eléctrico…"
+                    />
+                  </>
+                ) : null}
+              </Step>
+            </div>
+
+            <aside className="won-side">
+              <section className="won-place">
+                <span className="won-place__icon">
+                  <MapPin />
+                </span>
+                <div className="won-place__text">
+                  <span className="won-place__label">Punto del mapa</span>
+                  <span className="won-place__name">{placeName || 'Punto del mapa'}</span>
+                  {latitude !== null && longitude !== null ? (
+                    <span className="mono muted won-place__coords">
+                      {latitude.toFixed(6)}, {longitude.toFixed(6)}
+                    </span>
+                  ) : null}
+                </div>
+                {mapsUrl ? (
+                  <IconButton label="Abrir en Google Maps" size="sm" onClick={() => window.open(mapsUrl, '_blank', 'noopener,noreferrer')}>
+                    <ExternalLink />
+                  </IconButton>
+                ) : null}
+              </section>
+
+              <Step number={3} title="Cuadrilla" done={Boolean(crewId)} locked={!extracted} compact>
+                <div className="won-crews" role="radiogroup" aria-label="Cuadrilla">
+                  {crewList.map((crew, index) => (
+                    <CrewOption
+                      key={crew.id}
+                      crew={crew}
+                      number={index + 1}
+                      onShift={isOnShiftAt(crew, now)}
+                      selected={crew.id === crewId}
+                      disabled={!extracted}
+                      onSelect={() => setCrewId(crew.id)}
+                    />
                   ))}
                 </div>
-
-                <TextAreaField
-                  label="Contexto del reporte"
-                  hint="Texto de actividades / novedad"
-                  value={parsedNotes}
-                  onChange={(event) => setParsedNotes(event.target.value)}
-                  rows={5}
-                />
-                <TextAreaField
-                  label="Contexto adicional"
-                  hint="Notas tuyas para la cuadrilla (opcional)"
-                  value={adminNotes}
-                  onChange={(event) => setAdminNotes(event.target.value)}
-                  rows={3}
-                  placeholder="Ej. llevar módulo de repuesto, coordinar con eléctrico…"
-                />
-
-                <SelectField
-                  label="Cuadrilla"
-                  value={crewId}
-                  onChange={(event) => setCrewId(event.target.value)}
-                  error={touched ? crewError : null}
-                  placeholder="Selecciona cuadrilla"
-                >
-                  {crews.data.map((crew, index) => (
-                    <option key={crew.id} value={crew.id}>
-                      Cuadrilla {index + 1} · {formatPlate(crew.vehiclePlate)} · {crew.leadTechnician.fullName}
-                    </option>
-                  ))}
-                </SelectField>
-
-                {create.isError || update.isError || assign.isError ? (
-                  <InlineMessage>
-                    {messageOf(create.error ?? update.error ?? assign.error, 'No se pudo completar')}
+                {touched && crewError ? <p className="won-error">{crewError}</p> : null}
+                {selectedOffShift ? (
+                  <InlineMessage kind="info" icon={<TriangleAlert />}>
+                    Según su horario, la cuadrilla está fuera de turno. Si no se puede asignar ahora, guarda la orden como borrador.
                   </InlineMessage>
                 ) : null}
+              </Step>
 
-                <div className="ot-form__actions">
-                  <Button variant="text" onClick={() => navigate(routes.externals)} disabled={busy}>
-                    Cancelar
-                  </Button>
-                  <Button variant="outlined" onClick={() => void saveDraft()} disabled={busy}>
-                    Guardar borrador
-                  </Button>
-                  <Button onClick={() => void assignOrder()} disabled={busy}>
-                    Asignar orden
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <p className="muted" style={{ fontSize: '0.875rem' }}>
-                Pega el mensaje y pulsa <strong>Extraer datos</strong> para revisar el borrador antes de
-                asignar.
-              </p>
-            )}
+              {create.isError || update.isError || assign.isError ? (
+                <InlineMessage>{messageOf(create.error ?? update.error ?? assign.error, 'No se pudo completar')}</InlineMessage>
+              ) : null}
+
+              <div className="won-actions">
+                <Button onClick={() => void assignOrder()} disabled={busy || !extracted} loading={assign.isPending}>
+                  Asignar orden
+                </Button>
+                <Button variant="outlined" onClick={() => void saveDraft()} disabled={busy || !extracted}>
+                  Guardar borrador
+                </Button>
+                <Button variant="text" onClick={() => navigate(routes.externals)} disabled={busy}>
+                  Cancelar
+                </Button>
+              </div>
+            </aside>
           </div>
         ) : null}
       </div>
     </>
+  )
+}
+
+function Step({
+  number,
+  title,
+  hint,
+  done,
+  locked = false,
+  compact = false,
+  children,
+}: {
+  number: number
+  title: string
+  hint?: string
+  done: boolean
+  locked?: boolean
+  compact?: boolean
+  children: ReactNode
+}) {
+  return (
+    <section className={['won-step', done ? 'is-done' : '', locked ? 'is-locked' : '', compact ? 'won-step--compact' : ''].join(' ')}>
+      <header className="won-step__head">
+        <span className="won-step__badge">{done ? <Check /> : number}</span>
+        <div>
+          <h2>{title}</h2>
+          {hint ? <p>{hint}</p> : null}
+        </div>
+      </header>
+      <div className="won-step__body">{children}</div>
+    </section>
+  )
+}
+
+function CrewOption({
+  crew,
+  number,
+  onShift,
+  selected,
+  disabled,
+  onSelect,
+}: {
+  crew: Crew
+  number: number
+  onShift: boolean
+  selected: boolean
+  disabled: boolean
+  onSelect: () => void
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      disabled={disabled}
+      className={`won-crew${selected ? ' is-selected' : ''}${onShift ? ' is-on' : ''}`}
+      onClick={onSelect}
+    >
+      <span className="won-crew__radio" aria-hidden />
+      <span className="won-crew__text">
+        <span className="won-crew__top">
+          <strong>Cuadrilla {number}</strong>
+          <span className="plate-tag">{formatPlate(crew.vehiclePlate)}</span>
+        </span>
+        <span className="won-crew__lead">{crew.leadTechnician.fullName}</span>
+      </span>
+      <span className={`tone-pill tone-pill--${onShift ? 'success' : 'neutral'}`}>{onShift ? 'En turno' : 'Fuera de turno'}</span>
+    </button>
   )
 }

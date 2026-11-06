@@ -389,6 +389,7 @@ function toDutyChecklistLine(dto: DutyChecklistLineDto): DutyChecklistLine {
     brand: text(dto.brand),
     serial: text(dto.serial),
     mark: isChecklistMark(dto.mark) ? dto.mark : 'PENDING',
+    comment: text(dto.comment),
     markedByName: text(dto.markedByName),
     openMark: isChecklistMark(dto.openMark) ? dto.openMark : null,
   }

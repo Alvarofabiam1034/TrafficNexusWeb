@@ -10,27 +10,62 @@ import {
   Truck,
   Users,
 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 
 import { useContainer, useRequiredSession } from '@/application/ContainerContext'
 import { useProjects } from '@/application/hooks/useAdmin'
+import { useWorkOrders } from '@/application/hooks/useWorkOrders'
+import { isActiveOrder } from '@/domain/map/placeOrders'
 import { accountRoleLabel } from '@/presentation/i18n/labels'
 
 import { routes } from './routes'
 import './appShell.css'
 
-const destinations = [
-  { to: routes.crews, label: 'Cuadrillas', icon: Users },
-  { to: routes.workOrders, label: 'Órdenes', icon: ClipboardList },
-  { to: routes.duties, label: 'Jornadas', icon: ClipboardCheck },
-  { to: routes.vehicles, label: 'Vehículos', icon: Truck },
-  { to: routes.inventory, label: 'Inventario', icon: Package },
-  { to: routes.externals, label: 'Externos', icon: Map },
-  { to: routes.admin, label: 'Admin', icon: ShieldCheck },
-] as const
+type Tone = 'accent' | 'info' | 'caution' | 'success' | 'orange' | 'violet' | 'neutral'
+type BadgeKey = 'activeOrders'
+
+interface Destination {
+  readonly to: string
+  readonly label: string
+  readonly icon: typeof Users
+  readonly tone: Tone
+  readonly badge?: BadgeKey
+}
+
+const sections: readonly { title: string; items: readonly Destination[] }[] = [
+  {
+    title: 'Operación',
+    items: [
+      { to: routes.crews, label: 'Cuadrillas', icon: Users, tone: 'accent' },
+      { to: routes.workOrders, label: 'Órdenes', icon: ClipboardList, tone: 'info', badge: 'activeOrders' },
+      { to: routes.externals, label: 'Externos', icon: Map, tone: 'success' },
+      { to: routes.duties, label: 'Jornadas', icon: ClipboardCheck, tone: 'caution' },
+    ],
+  },
+  {
+    title: 'Recursos',
+    items: [
+      { to: routes.vehicles, label: 'Vehículos', icon: Truck, tone: 'orange' },
+      { to: routes.inventory, label: 'Inventario', icon: Package, tone: 'violet' },
+    ],
+  },
+  {
+    title: 'Sistema',
+    items: [{ to: routes.admin, label: 'Admin', icon: ShieldCheck, tone: 'neutral' }],
+  },
+]
+
+const destinations = sections.flatMap((section) => section.items)
+
+function useBadges(): Record<BadgeKey, number> {
+  const orders = useWorkOrders()
+  const activeOrders = useMemo(() => (orders.data ?? []).filter(isActiveOrder).length, [orders.data])
+  return { activeOrders }
+}
 
 export function AppShell() {
+  const badges = useBadges()
   return (
     <div className="shell">
       <aside className="shell__sidebar">
@@ -39,11 +74,26 @@ export function AppShell() {
         </div>
         <ProjectSwitcher />
         <nav className="shell__nav" aria-label="Secciones">
-          {destinations.map(({ to, label, icon: Icon }) => (
-            <NavLink key={to} to={to} className="shell__link">
-              <Icon />
-              <span>{label}</span>
-            </NavLink>
+          {sections.map((section) => (
+            <div key={section.title} className="shell__section">
+              <span className="shell__section-title">{section.title}</span>
+              {section.items.map(({ to, label, icon: Icon, tone, badge }) => {
+                const count = badge ? badges[badge] : 0
+                return (
+                  <NavLink key={to} to={to} className={`shell__link shell__link--${tone}`}>
+                    <span className="shell__link-icon">
+                      <Icon />
+                    </span>
+                    <span className="shell__link-label">{label}</span>
+                    {count > 0 ? (
+                      <span className="shell__badge" title={`${count} abiertas`}>
+                        {count}
+                      </span>
+                    ) : null}
+                  </NavLink>
+                )
+              })}
+            </div>
           ))}
         </nav>
         <UserCard />
@@ -54,14 +104,18 @@ export function AppShell() {
       </main>
 
       <nav className="shell__bottom" aria-label="Secciones">
-        {destinations.map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={to} className="shell__tab">
-            <span className="shell__tab-indicator">
-              <Icon />
-            </span>
-            <span>{label}</span>
-          </NavLink>
-        ))}
+        {destinations.map(({ to, label, icon: Icon, tone, badge }) => {
+          const count = badge ? badges[badge] : 0
+          return (
+            <NavLink key={to} to={to} className={`shell__tab shell__link--${tone}`}>
+              <span className="shell__tab-indicator">
+                <Icon />
+                {count > 0 ? <span className="shell__tab-badge">{count}</span> : null}
+              </span>
+              <span>{label}</span>
+            </NavLink>
+          )
+        })}
       </nav>
     </div>
   )
@@ -96,8 +150,13 @@ function ProjectSwitcher() {
         aria-expanded={open}
         disabled={list.length <= 1}
       >
-        <Boxes />
-        <span className="shell__project-name">{current?.name ?? 'Proyecto'}</span>
+        <span className="shell__project-icon">
+          <Boxes />
+        </span>
+        <span className="shell__project-text">
+          <span className="shell__project-label">Proyecto</span>
+          <span className="shell__project-name">{current?.name ?? 'Proyecto'}</span>
+        </span>
         {list.length > 1 ? <ChevronDown className="shell__project-chevron" /> : null}
       </button>
       {open ? (

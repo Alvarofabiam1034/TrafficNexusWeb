@@ -11,7 +11,6 @@ import {
 import { ErrorState, Loading } from '@/presentation/components/States'
 
 const PLACE_COLOR = '#00D6A0'
-const SELECTED_COLOR = '#FFC928'
 
 interface GoogleMapViewProps {
   places: readonly MapPlace[]
@@ -21,6 +20,8 @@ interface GoogleMapViewProps {
   selectedPlaceId: string | null
   target: MapCameraTarget | null
   onSelectPlace: (placeId: string) => void
+  /** Color de relleno por punto (p. ej. estado de su OT activa). Los puntos con color se dibujan encima. */
+  placeColors?: ReadonlyMap<string, string>
 }
 
 export function GoogleMapView({
@@ -31,6 +32,7 @@ export function GoogleMapView({
   selectedPlaceId,
   target,
   onSelectPlace,
+  placeColors,
 }: GoogleMapViewProps) {
   const hostRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<google.maps.Map | null>(null)
@@ -153,14 +155,16 @@ export function GoogleMapView({
 
     for (const place of places) {
       const selected = place.id === selectedPlaceId
-      const icon = circleIcon(selected)
+      const color = placeColors?.get(place.id)
+      const icon = circleIcon(color ?? PLACE_COLOR, selected, color !== undefined)
+      const zIndex = selected ? 3 : color ? 2 : 1
       const position = { lat: place.latitude, lng: place.longitude }
       const existing = markersRef.current.get(place.id)
       if (existing) {
         existing.setPosition(position)
         existing.setIcon(icon)
         existing.setTitle(place.name)
-        existing.setZIndex(selected ? 2 : 1)
+        existing.setZIndex(zIndex)
         continue
       }
       const marker = new google.maps.Marker({
@@ -168,13 +172,13 @@ export function GoogleMapView({
         position,
         icon,
         title: place.name,
-        zIndex: selected ? 2 : 1,
+        zIndex,
         optimized: true,
       })
       marker.addListener('click', () => onSelectRef.current(place.id))
       markersRef.current.set(place.id, marker)
     }
-  }, [places, pointsVisible, selectedPlaceId, ready])
+  }, [places, pointsVisible, selectedPlaceId, placeColors, ready])
 
   // Cleanup al desmontar
   useEffect(() => {
@@ -207,13 +211,13 @@ export function GoogleMapView({
   )
 }
 
-function circleIcon(selected: boolean): google.maps.Symbol {
+function circleIcon(color: string, selected: boolean, highlighted: boolean): google.maps.Symbol {
   return {
     path: google.maps.SymbolPath.CIRCLE,
-    scale: selected ? 10 : 7,
-    fillColor: selected ? SELECTED_COLOR : PLACE_COLOR,
-    fillOpacity: 0.9,
-    strokeColor: selected ? '#FFE082' : '#00A87E',
-    strokeWeight: selected ? 3 : 1.5,
+    scale: selected ? 11 : highlighted ? 8.5 : 6.5,
+    fillColor: color,
+    fillOpacity: 0.95,
+    strokeColor: selected ? '#FFFFFF' : '#0E1115',
+    strokeWeight: selected ? 3.5 : highlighted ? 2 : 1.5,
   }
 }

@@ -1,5 +1,5 @@
-import { ExternalLink, FileText, MapPin, Users } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { ExternalLink, FileText, MapPin, MessageSquareText, Smartphone, Users } from 'lucide-react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { useIsAdmin } from '@/application/ContainerContext'
@@ -7,24 +7,35 @@ import { useCrews } from '@/application/hooks/useCrews'
 import { useAssignWorkOrder, useUpdateWorkOrder, useWorkOrder } from '@/application/hooks/useWorkOrders'
 import { DomainError, messageOf } from '@/domain/errors'
 import { drivePreviewUrl } from '@/domain/map/drivePreview'
+import type { Crew } from '@/domain/model/crew'
 import {
   maxPriority,
-  workOrderStateChipClass,
   workOrderStateLabel,
+  type WorkOrder,
   type WorkOrderItemInput,
   type WorkOrderPlace,
 } from '@/domain/model/workOrder'
-import { formatPlate } from '@/domain/validation/crewValidator'
+import { formatPhone, formatPlate } from '@/domain/validation/crewValidator'
 import { routes } from '@/presentation/app/routes'
 import { Button } from '@/presentation/components/Button'
-import { TextAreaField, TextField, SelectField } from '@/presentation/components/Field'
+import { SelectField, TextAreaField, TextField } from '@/presentation/components/Field'
 import { PageHeader } from '@/presentation/components/PageHeader'
 import { ErrorState, InlineMessage, Loading } from '@/presentation/components/States'
+import { Timeline, TimelineStep } from '@/presentation/components/Timeline'
 import { useToast } from '@/presentation/components/Toast'
-import { formatDateTime } from '@/presentation/i18n/labels'
+import { formatDateTime, plural } from '@/presentation/i18n/labels'
 
 import { WorkOrderEvidences } from './WorkOrderEvidences'
+import { priorityTone, STATE_TONE } from './workOrderTone'
 import './workOrders.css'
+
+const ITEM_COLUMNS: readonly { key: keyof WorkOrderItemInput; label: string }[] = [
+  { key: 'externalId', label: 'ID' },
+  { key: 'priority', label: 'Prioridad' },
+  { key: 'address', label: 'Dirección' },
+  { key: 'equipment', label: 'Equipo' },
+  { key: 'maintenance', label: 'Mant.' },
+]
 
 export default function WorkOrderDetailPage() {
   const { workOrderId = null } = useParams<{ workOrderId: string }>()
@@ -86,23 +97,27 @@ export default function WorkOrderDetailPage() {
     )
   }
 
-  const crew = crews.data?.find((item) => item.id === data.crewId)
+  const crewList = crews.data ?? []
+  const crew = crewList.find((item) => item.id === data.crewId)
   const priority = maxPriority(data.items)
+  const tone = STATE_TONE[data.state]
   const canEdit = isAdmin && (data.state === 'DRAFT' || data.state === 'ASSIGNED')
   const busy = update.isPending || assign.isPending
 
+  const draft = () => ({
+    externalNumber: externalNumber.trim(),
+    statusReported: statusReported.trim(),
+    parsedNotes: parsedNotes.trim(),
+    adminNotes: adminNotes.trim(),
+    items: items.filter((item) => item.externalId.trim() || item.address.trim()),
+  })
+
+  const setItemField = (index: number, key: keyof WorkOrderItemInput, value: string) =>
+    setItems((current) => current.map((row, i) => (i === index ? { ...row, [key]: value } : row)))
+
   const save = async () => {
     try {
-      await update.mutateAsync({
-        workOrderId: data.id,
-        draft: {
-          externalNumber: externalNumber.trim(),
-          statusReported: statusReported.trim(),
-          parsedNotes: parsedNotes.trim(),
-          adminNotes: adminNotes.trim(),
-          items: items.filter((item) => item.externalId.trim() || item.address.trim()),
-        },
-      })
+      await update.mutateAsync({ workOrderId: data.id, draft: draft() })
       toast.success('Orden actualizada')
     } catch (error) {
       toast.error(messageOf(error, 'No se pudo actualizar'))
@@ -115,18 +130,7 @@ export default function WorkOrderDetailPage() {
       return
     }
     try {
-      if (canEdit) {
-        await update.mutateAsync({
-          workOrderId: data.id,
-          draft: {
-            externalNumber: externalNumber.trim(),
-            statusReported: statusReported.trim(),
-            parsedNotes: parsedNotes.trim(),
-            adminNotes: adminNotes.trim(),
-            items: items.filter((item) => item.externalId.trim() || item.address.trim()),
-          },
-        })
-      }
+      if (canEdit) await update.mutateAsync({ workOrderId: data.id, draft: draft() })
       const next = await assign.mutateAsync({ workOrderId: data.id, crewId })
       toast.success(`Asignada al externo ${next.externalNumber}`)
       navigate(routes.workOrder(next.id))
@@ -139,277 +143,282 @@ export default function WorkOrderDetailPage() {
     }
   }
 
+  const itemCount = canEdit ? items.length : data.items.length
+
   return (
     <>
       <PageHeader
         title={data.externalNumber ? `Externo ${data.externalNumber}` : 'Orden'}
-        subtitle={
-          <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-            <span className={workOrderStateChipClass(data.state)}>{workOrderStateLabel(data.state)}</span>
-            {data.statusReported ? <span className="ot-chip ot-chip--status">{data.statusReported}</span> : null}
-            {priority ? <span className="ot-chip ot-chip--priority">{priority}</span> : null}
-          </span>
-        }
+        subtitle={data.place?.name || undefined}
         backTo={routes.workOrders}
       />
       <div className="page-body">
-        <div className="ot-detail">
-          <WorkOrderPlaceBlock place={data.place} />
-          {canEdit ? (
-            <div className="ot-form">
-              <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
-                <div style={{ flex: '1 1 140px' }}>
-                  <TextField
-                    label="Externo"
-                    value={externalNumber}
-                    onChange={(event) => setExternalNumber(event.target.value)}
-                  />
-                </div>
-                <div style={{ flex: '1 1 180px' }}>
-                  <TextField
-                    label="Estado reportado"
-                    value={statusReported}
-                    onChange={(event) => setStatusReported(event.target.value)}
-                  />
-                </div>
+        <div className="wo-detail">
+          <section className={`wo-hero wo-hero--${tone}`}>
+            <div className="wo-hero__head">
+              <div className="wo-hero__title">
+                <span className="wo-hero__label">Externo</span>
+                <span className="wo-hero__number">{data.externalNumber || '—'}</span>
               </div>
-              <TextAreaField
-                label="Contexto del reporte"
-                value={parsedNotes}
-                onChange={(event) => setParsedNotes(event.target.value)}
-                rows={4}
-              />
-              <TextAreaField
-                label="Contexto adicional"
-                value={adminNotes}
-                onChange={(event) => setAdminNotes(event.target.value)}
-                rows={3}
-              />
-
-              {data.items.length > 0 || items.length > 0 ? (
-                <div className="ot-detail__block">
-                  <h2>IDs</h2>
-                  <div style={{ overflowX: 'auto' }}>
-                    <table className="ot-table">
-                      <thead>
-                        <tr>
-                          <th>ID</th>
-                          <th>Prioridad</th>
-                          <th>Dirección</th>
-                          <th>Equipo</th>
-                          <th>Mant.</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {items.map((item, index) => (
-                          <tr key={`${item.externalId}-${index}`}>
-                            <td>
-                              <input
-                                className="ot-inline"
-                                value={item.externalId}
-                                onChange={(event) =>
-                                  setItems((current) =>
-                                    current.map((row, i) =>
-                                      i === index ? { ...row, externalId: event.target.value } : row,
-                                    ),
-                                  )
-                                }
-                              />
-                            </td>
-                            <td>
-                              <input
-                                className="ot-inline"
-                                value={item.priority}
-                                onChange={(event) =>
-                                  setItems((current) =>
-                                    current.map((row, i) =>
-                                      i === index ? { ...row, priority: event.target.value } : row,
-                                    ),
-                                  )
-                                }
-                              />
-                            </td>
-                            <td>
-                              <input
-                                className="ot-inline"
-                                value={item.address}
-                                onChange={(event) =>
-                                  setItems((current) =>
-                                    current.map((row, i) =>
-                                      i === index ? { ...row, address: event.target.value } : row,
-                                    ),
-                                  )
-                                }
-                              />
-                            </td>
-                            <td>
-                              <input
-                                className="ot-inline"
-                                value={item.equipment}
-                                onChange={(event) =>
-                                  setItems((current) =>
-                                    current.map((row, i) =>
-                                      i === index ? { ...row, equipment: event.target.value } : row,
-                                    ),
-                                  )
-                                }
-                              />
-                            </td>
-                            <td>
-                              <input
-                                className="ot-inline"
-                                value={item.maintenance}
-                                onChange={(event) =>
-                                  setItems((current) =>
-                                    current.map((row, i) =>
-                                      i === index ? { ...row, maintenance: event.target.value } : row,
-                                    ),
-                                  )
-                                }
-                              />
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ) : null}
-
-              <SelectField
-                label={data.state === 'ASSIGNED' ? 'Reasignar cuadrilla' : 'Cuadrilla'}
-                value={crewId}
-                onChange={(event) => setCrewId(event.target.value)}
-                placeholder="Selecciona cuadrilla"
-              >
-                {(crews.data ?? []).map((crewOption, index) => (
-                  <option key={crewOption.id} value={crewOption.id}>
-                    Cuadrilla {index + 1} · {formatPlate(crewOption.vehiclePlate)} ·{' '}
-                    {crewOption.leadTechnician.fullName}
-                  </option>
-                ))}
-              </SelectField>
-
-              {update.isError || assign.isError ? (
-                <InlineMessage>{messageOf(update.error ?? assign.error, 'Error')}</InlineMessage>
-              ) : null}
-
-              <div className="ot-form__actions">
-                <Button variant="outlined" onClick={() => void save()} disabled={busy}>
-                  Guardar cambios
-                </Button>
-                <Button onClick={() => void assignCrew()} disabled={busy || !crewId}>
-                  {data.state === 'ASSIGNED' ? 'Reasignar' : 'Asignar orden'}
-                </Button>
+              <div className="wo-hero__chips">
+                <span className={`tone-pill tone-pill--dot tone-pill--${tone}`}>{workOrderStateLabel(data.state)}</span>
+                {data.statusReported ? <span className="tone-pill tone-pill--info">{data.statusReported}</span> : null}
+                {priority ? <span className={`tone-pill tone-pill--${priorityTone(priority)}`}>Prioridad {priority}</span> : null}
               </div>
             </div>
-          ) : (
-            <>
-              <div className="ot-detail__block">
-                <h2>Cuadrilla</h2>
-                <p className="ot-detail__text" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Users size={16} />
-                  {crew
-                    ? `${formatPlate(crew.vehiclePlate)} · ${crew.leadTechnician.fullName}`
-                    : 'Sin cuadrilla'}
-                </p>
-                <p className="muted" style={{ fontSize: '0.8125rem' }}>
-                  {data.assignedAt
-                    ? `Asignada el ${formatDateTime(data.assignedAt)} por ${data.assignedByName || '—'}`
-                    : `Creada el ${formatDateTime(data.createdAt)} por ${data.createdByName || '—'}`}
-                </p>
-              </div>
+            <OrderTimeline order={data} />
+          </section>
 
-              {data.items.length > 0 ? (
-                <div className="ot-detail__block">
-                  <h2>IDs</h2>
-                  <div style={{ overflowX: 'auto' }}>
-                    <table className="ot-table">
+          <div className="wo-layout">
+            <div className="wo-main">
+              {canEdit ? (
+                <WoCard title="Datos de la orden">
+                  <div className="wo-form-row">
+                    <TextField label="Externo" value={externalNumber} onChange={(event) => setExternalNumber(event.target.value)} />
+                    <TextField
+                      label="Estado reportado"
+                      value={statusReported}
+                      onChange={(event) => setStatusReported(event.target.value)}
+                    />
+                  </div>
+                  <TextAreaField
+                    label="Contexto del reporte"
+                    value={parsedNotes}
+                    onChange={(event) => setParsedNotes(event.target.value)}
+                    rows={4}
+                  />
+                  <TextAreaField
+                    label="Contexto adicional"
+                    value={adminNotes}
+                    onChange={(event) => setAdminNotes(event.target.value)}
+                    rows={3}
+                  />
+                </WoCard>
+              ) : null}
+
+              {itemCount > 0 ? (
+                <WoCard title="IDs" badge={plural(itemCount, 'equipo', 'equipos')} flush>
+                  <div className="wo-table-wrap">
+                    <table className="wo-table">
                       <thead>
                         <tr>
-                          <th>ID</th>
-                          <th>Prioridad</th>
-                          <th>Dirección</th>
-                          <th>Equipo</th>
-                          <th>Mant.</th>
+                          {ITEM_COLUMNS.map((column) => (
+                            <th key={column.key}>{column.label}</th>
+                          ))}
                         </tr>
                       </thead>
                       <tbody>
-                        {data.items.map((item) => (
-                          <tr key={item.id || item.externalId + item.address}>
-                            <td className="mono">{item.externalId}</td>
-                            <td>{item.priority}</td>
-                            <td>{item.address}</td>
-                            <td>{item.equipment}</td>
-                            <td>{item.maintenance}</td>
-                          </tr>
-                        ))}
+                        {canEdit
+                          ? items.map((item, index) => (
+                              <tr key={index}>
+                                {ITEM_COLUMNS.map((column) => (
+                                  <td key={column.key}>
+                                    <input
+                                      className="ot-inline"
+                                      aria-label={`${column.label} fila ${index + 1}`}
+                                      value={item[column.key]}
+                                      onChange={(event) => setItemField(index, column.key, event.target.value)}
+                                    />
+                                  </td>
+                                ))}
+                              </tr>
+                            ))
+                          : data.items.map((item) => (
+                              <tr key={item.id || item.externalId + item.address}>
+                                <td>
+                                  <span className="wo-id">{item.externalId || '—'}</span>
+                                </td>
+                                <td>
+                                  {item.priority ? (
+                                    <span className={`tone-pill tone-pill--${priorityTone(item.priority)}`}>{item.priority}</span>
+                                  ) : (
+                                    <span className="muted">—</span>
+                                  )}
+                                </td>
+                                <td>{item.address}</td>
+                                <td>{item.equipment}</td>
+                                <td>{item.maintenance}</td>
+                              </tr>
+                            ))}
                       </tbody>
                     </table>
                   </div>
-                </div>
+                </WoCard>
               ) : null}
 
-              {data.parsedNotes ? (
-                <div className="ot-detail__block">
-                  <h2>Contexto del reporte</h2>
-                  <p className="ot-detail__text">{data.parsedNotes}</p>
-                </div>
+              {!canEdit && (data.parsedNotes || data.adminNotes) ? (
+                <WoCard title="Contexto">
+                  {data.parsedNotes ? (
+                    <div className="wo-note">
+                      <span className="wo-note__label">Del reporte</span>
+                      <p>{data.parsedNotes}</p>
+                    </div>
+                  ) : null}
+                  {data.adminNotes ? (
+                    <div className="wo-note wo-note--accent">
+                      <span className="wo-note__label">Adicional</span>
+                      <p>{data.adminNotes}</p>
+                    </div>
+                  ) : null}
+                </WoCard>
               ) : null}
 
-              {data.adminNotes ? (
-                <div className="ot-detail__block">
-                  <h2>Contexto adicional</h2>
-                  <p className="ot-detail__text">{data.adminNotes}</p>
-                </div>
+              <WoCard>
+                <WorkOrderEvidences workOrderId={data.id} externalNumber={data.externalNumber} canEditCaption={isAdmin} />
+              </WoCard>
+
+              {data.rawMessage ? (
+                <details className="wo-card wo-raw">
+                  <summary>
+                    <MessageSquareText aria-hidden /> Mensaje original
+                  </summary>
+                  <pre className="ot-detail__raw">{data.rawMessage}</pre>
+                </details>
               ) : null}
+            </div>
+
+            <aside className="wo-side">
+              <PlaceCard place={data.place} />
+
+              {canEdit ? (
+                <WoCard title={data.state === 'ASSIGNED' ? 'Reasignar' : 'Asignación'} accent>
+                  {crew ? <CrewSummary crew={crew} /> : null}
+                  <SelectField
+                    label={data.state === 'ASSIGNED' ? 'Nueva cuadrilla' : 'Cuadrilla'}
+                    value={crewId}
+                    onChange={(event) => setCrewId(event.target.value)}
+                    placeholder="Selecciona cuadrilla"
+                  >
+                    {crewList.map((crewOption, index) => (
+                      <option key={crewOption.id} value={crewOption.id}>
+                        Cuadrilla {index + 1} · {formatPlate(crewOption.vehiclePlate)} · {crewOption.leadTechnician.fullName}
+                      </option>
+                    ))}
+                  </SelectField>
+                  {update.isError || assign.isError ? (
+                    <InlineMessage>{messageOf(update.error ?? assign.error, 'Error')}</InlineMessage>
+                  ) : null}
+                  <div className="wo-actions">
+                    <Button onClick={() => void assignCrew()} disabled={busy || !crewId}>
+                      {data.state === 'ASSIGNED' ? 'Reasignar' : 'Asignar orden'}
+                    </Button>
+                    <Button variant="outlined" onClick={() => void save()} disabled={busy}>
+                      Guardar cambios
+                    </Button>
+                  </div>
+                </WoCard>
+              ) : (
+                <WoCard title="Cuadrilla">
+                  {crew ? (
+                    <CrewSummary crew={crew} />
+                  ) : (
+                    <p className="wo-muted-line">
+                      <Users aria-hidden /> Sin cuadrilla
+                    </p>
+                  )}
+                </WoCard>
+              )}
 
               {data.state === 'DONE' ? (
-                <div className="ot-detail__block">
-                  <h2>Cierre</h2>
-                  <p className="ot-detail__text">
+                <WoCard title="Cierre" tone="success">
+                  <p className="wo-muted-line">
                     {data.closedByName ? `Cerrada por ${data.closedByName}` : 'Orden finalizada'}
                     {data.closedAt ? ` · ${formatDateTime(data.closedAt)}` : ''}
                   </p>
                   {data.closeComment ? (
-                    <p className="ot-detail__text" style={{ marginTop: 8 }}>
-                      {data.closeComment}
-                    </p>
+                    <p className="wo-quote">{data.closeComment}</p>
                   ) : (
-                    <p className="ot-detail__text" style={{ marginTop: 8, opacity: 0.7 }}>
+                    <p className="muted" style={{ margin: 0, fontSize: '0.875rem' }}>
                       Sin comentario de cierre.
                     </p>
                   )}
-                </div>
+                </WoCard>
               ) : null}
-            </>
-          )}
-
-          {data.rawMessage ? (
-            <div className="ot-detail__block">
-              <h2>Mensaje original</h2>
-              <pre className="ot-detail__raw">{data.rawMessage}</pre>
-            </div>
-          ) : null}
-
-          <WorkOrderEvidences
-            workOrderId={data.id}
-            externalNumber={data.externalNumber}
-            canEditCaption={isAdmin}
-          />
+            </aside>
+          </div>
         </div>
       </div>
     </>
   )
 }
 
-function WorkOrderPlaceBlock({ place }: { place: WorkOrderPlace | null }) {
+function WoCard({
+  title,
+  badge,
+  tone,
+  accent = false,
+  flush = false,
+  children,
+}: {
+  title?: string
+  badge?: string
+  tone?: 'success'
+  accent?: boolean
+  flush?: boolean
+  children: ReactNode
+}) {
+  return (
+    <section
+      className={['wo-card', accent ? 'wo-card--accent' : '', tone ? `wo-card--${tone}` : '', flush ? 'wo-card--flush' : '']
+        .filter(Boolean)
+        .join(' ')}
+    >
+      {title ? (
+        <header className="wo-card__header">
+          <h2>{title}</h2>
+          {badge ? <span className="wo-card__badge">{badge}</span> : null}
+        </header>
+      ) : null}
+      <div className="wo-card__body">{children}</div>
+    </section>
+  )
+}
+
+function OrderTimeline({ order }: { order: WorkOrder }) {
+  const closing =
+    order.state === 'CANCELLED'
+      ? { tone: 'danger' as const, value: 'Cancelada', by: '' }
+      : order.closedAt
+        ? { tone: 'success' as const, value: formatDateTime(order.closedAt), by: order.closedByName }
+        : order.state === 'IN_PROGRESS'
+          ? { tone: 'caution' as const, value: 'En progreso', by: 'La cuadrilla está trabajando' }
+          : { tone: 'neutral' as const, value: 'Pendiente', by: '' }
+  return (
+    <Timeline>
+      <TimelineStep label="Creada" tone="success" value={formatDateTime(order.createdAt)} by={order.createdByName} />
+      <TimelineStep
+        label="Asignada"
+        tone={order.assignedAt ? 'info' : 'neutral'}
+        value={order.assignedAt ? formatDateTime(order.assignedAt) : 'Sin asignar'}
+        by={order.assignedAt ? order.assignedByName : ''}
+      />
+      <TimelineStep label="Finalizada" tone={closing.tone} value={closing.value} by={closing.by} />
+    </Timeline>
+  )
+}
+
+function CrewSummary({ crew }: { crew: Crew }) {
+  return (
+    <div className="wo-crew">
+      <span className="plate-tag">{formatPlate(crew.vehiclePlate)}</span>
+      <div className="wo-crew__info">
+        <span className="wo-crew__name">{crew.leadTechnician.fullName}</span>
+        <span className="wo-crew__phone">
+          <Smartphone aria-hidden /> +57 {formatPhone(crew.corporatePhone)}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function PlaceCard({ place }: { place: WorkOrderPlace | null }) {
   if (!place) {
     return (
-      <div className="ot-detail__block">
-        <h2>Ubicación</h2>
-        <p className="ot-detail__text muted">Sin ubicación (OT anterior al anclaje al mapa)</p>
-      </div>
+      <WoCard title="Ubicación">
+        <p className="wo-muted-line">
+          <MapPin aria-hidden /> Sin ubicación (OT anterior al anclaje al mapa)
+        </p>
+      </WoCard>
     )
   }
 
@@ -421,34 +430,28 @@ function WorkOrderPlaceBlock({ place }: { place: WorkOrderPlace | null }) {
   }
 
   return (
-    <div className="ot-detail__block">
-      <h2>Ubicación</h2>
-      <div className="ot-place-banner">
-        <span className="icon-badge icon-badge--hi">
-          <MapPin size={18} />
+    <WoCard title="Ubicación">
+      <div className="wo-place">
+        <span className="wo-place__icon">
+          <MapPin />
         </span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="ot-place-banner__title">{place.name || 'Punto del mapa'}</div>
-          <div className="mono muted" style={{ fontSize: '0.75rem' }}>
+        <div className="wo-place__text">
+          <div className="wo-place__name">{place.name || 'Punto del mapa'}</div>
+          <div className="mono muted wo-place__coords">
             {place.latitude.toFixed(6)}, {place.longitude.toFixed(6)}
           </div>
         </div>
-        <div className="row" style={{ flexWrap: 'wrap', gap: 4, justifyContent: 'flex-end' }}>
-          {place.documentation ? (
-            <Button variant="text" size="sm" icon={<FileText />} onClick={openDocumentation}>
-              Docs
-            </Button>
-          ) : null}
-          <Button
-            variant="text"
-            size="sm"
-            icon={<ExternalLink />}
-            onClick={() => window.open(mapsUrl, '_blank', 'noopener,noreferrer')}
-          >
-            Maps
-          </Button>
-        </div>
       </div>
-    </div>
+      <div className="wo-actions wo-actions--inline">
+        <Button variant="tonal" size="sm" icon={<ExternalLink />} onClick={() => window.open(mapsUrl, '_blank', 'noopener,noreferrer')}>
+          Abrir en Maps
+        </Button>
+        {place.documentation ? (
+          <Button variant="text" size="sm" icon={<FileText />} onClick={openDocumentation}>
+            Documentación
+          </Button>
+        ) : null}
+      </div>
+    </WoCard>
   )
 }
