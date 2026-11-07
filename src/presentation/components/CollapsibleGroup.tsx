@@ -43,9 +43,26 @@ export function useCollapsedGroups(storageKey: string) {
     persist(next)
   }
 
+  const expand = useCallback(
+    (id: string) => {
+      setCollapsed((current) => {
+        if (!current.has(id)) return current
+        const next = new Set(current)
+        next.delete(id)
+        try {
+          localStorage.setItem(storageKey, JSON.stringify([...next]))
+        } catch {
+          // Sin almacenamiento disponible: el estado vive solo en memoria.
+        }
+        return next
+      })
+    },
+    [storageKey],
+  )
+
   const setAll = (ids: readonly string[], value: boolean) => persist(value ? new Set(ids) : new Set())
 
-  return { isCollapsed: (id: string) => collapsed.has(id), toggle, setAll }
+  return { isCollapsed: (id: string) => collapsed.has(id), toggle, expand, setAll }
 }
 
 export function CollapseAllBar({

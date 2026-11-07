@@ -48,7 +48,7 @@ function createQueryClient(): QueryClient {
 /** Evita que el HMR de Vite deje un container viejo sin repos nuevos (p. ej. evidences). */
 function useAppContainer(): AppContainer {
   const [container, setContainer] = useState(createContainer)
-  if (!container.evidences || !container.duties) {
+  if (!container.evidences || !container.duties || !container.stockAlerts) {
     const next = createContainer()
     setContainer(next)
     return next

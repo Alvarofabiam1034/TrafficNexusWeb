@@ -75,6 +75,21 @@
   background: var(--tone-bg, rgba(255, 255, 255, 0.06));
 }
 
+.inventory-item__alert {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--tone-caution);
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--tone-caution-bg);
+}
+
+.inventory-item__threshold {
+  grid-column: 1 / -1;
+}
+
 .inventory-item__actions {
   display: flex;
   gap: 0;

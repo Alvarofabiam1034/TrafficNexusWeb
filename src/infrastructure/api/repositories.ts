@@ -9,6 +9,7 @@ import type {
   VehicleKit,
 } from '@/domain/model/fleet'
 import type { CatalogGroupKind, InventoryGroup, InventoryItem, InventoryUnit } from '@/domain/model/inventory'
+import { stockAlertsFromPayload, type StockAlert } from '@/domain/model/stockAlert'
 import type { MapVersion, MapVersionSummary, StoredMap } from '@/domain/model/map'
 import type { CrewShift } from '@/domain/model/shift'
 import type { AppUser, Project, ProjectMember, Session } from '@/domain/model/user'
@@ -29,6 +30,7 @@ import type {
   FleetRepository,
   InventoryItemPatch,
   InventoryRepository,
+  StockAlertRepository,
   MapRepository,
   ProjectRepository,
   SessionRepository,
@@ -384,9 +386,11 @@ export class ApiInventoryRepository implements InventoryRepository {
     groupName: string,
     kind: CatalogGroupKind | null,
     unit: InventoryUnit,
+    lowStockThreshold?: number | null,
   ): Promise<InventoryItem> {
     const body: Record<string, unknown> = { name, groupName, unit }
     if (kind !== null) body.kind = kind
+    if (typeof lowStockThreshold === 'number') body.lowStockThreshold = lowStockThreshold
     return toInventoryItem(await this.http.post<InventoryItemDto>(`${projectPath(projectId)}/inventory/items`, body))
   }
 
@@ -394,6 +398,7 @@ export class ApiInventoryRepository implements InventoryRepository {
     const body: Record<string, unknown> = {}
     if (patch.name !== undefined) body.name = patch.name
     if (patch.unit !== undefined) body.unit = patch.unit
+    if (patch.lowStockThreshold !== undefined) body.lowStockThreshold = patch.lowStockThreshold
     return toInventoryItem(
       await this.http.put<InventoryItemDto>(`${projectPath(projectId)}/inventory/items/${enc(itemId)}`, body),
     )
@@ -552,5 +557,36 @@ export class ApiEvidenceRepository implements EvidenceRepository {
         caption,
       }),
     )
+  }
+}
+
+export class ApiStockAlertRepository implements StockAlertRepository {
+  constructor(private readonly http: HttpClient) {}
+
+  async list(projectId: string): Promise<StockAlert[]> {
+    const payload = await this.http.get<unknown>(`${projectPath(projectId)}/stock-alerts`)
+    return stockAlertsFromPayload(payload) ?? []
+  }
+
+  watch(projectId: string, onSnapshot: (alerts: readonly StockAlert[]) => void, onError?: () => void): () => void {
+    const source = this.http.openEventSource(`${projectPath(projectId)}/stock-alerts/stream`)
+    const onStock = (event: Event) => {
+      if (!(event instanceof MessageEvent) || typeof event.data !== 'string') return
+      let payload: unknown
+      try {
+        payload = JSON.parse(event.data)
+      } catch {
+        return
+      }
+      const alerts = stockAlertsFromPayload(payload)
+      if (alerts) onSnapshot(alerts)
+    }
+    source.addEventListener('stock_alerts', onStock)
+    source.onerror = () => onError?.()
+    return () => {
+      source.onerror = null
+      source.removeEventListener('stock_alerts', onStock)
+      source.close()
+    }
   }
 }

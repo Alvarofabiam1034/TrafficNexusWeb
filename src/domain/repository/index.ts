@@ -8,6 +8,7 @@ import type {
   KitLine,
 } from '../model/fleet'
 import type { CatalogGroupKind, InventoryGroup, InventoryItem, InventoryUnit } from '../model/inventory'
+import type { StockAlert } from '../model/stockAlert'
 import type { MapVersion, MapVersionSummary, StoredMap } from '../model/map'
 import type { CrewShift } from '../model/shift'
 import type { AccountRole, AppUser, Project, ProjectMember, Session } from '../model/user'
@@ -111,6 +112,8 @@ export interface FleetRepository {
 export interface InventoryItemPatch {
   readonly name?: string
   readonly unit?: InventoryUnit
+  /** `null` apaga la alerta. Ausente: no se toca. */
+  readonly lowStockThreshold?: number | null
 }
 
 export interface InventoryRepository {
@@ -121,6 +124,7 @@ export interface InventoryRepository {
     groupName: string,
     kind: CatalogGroupKind | null,
     unit: InventoryUnit,
+    lowStockThreshold?: number | null,
   ): Promise<InventoryItem>
   updateItem(projectId: string, itemId: string, patch: InventoryItemPatch): Promise<InventoryItem>
   moveItem(projectId: string, itemId: string, delta: -1 | 1): Promise<void>
@@ -132,6 +136,17 @@ export interface InventoryRepository {
   ): Promise<InventoryGroup>
   moveGroup(projectId: string, groupId: string, delta: -1 | 1): Promise<void>
   removeGroup(projectId: string, groupId: string): Promise<void>
+}
+
+/** Alertas de stock bajo. El estado lo manda el servidor: no hay bandeja ni acuse. */
+export interface StockAlertRepository {
+  list(projectId: string): Promise<StockAlert[]>
+  /** Abre el SSE y devuelve el cierre. Cada evento trae el snapshot completo. */
+  watch(
+    projectId: string,
+    onSnapshot: (alerts: readonly StockAlert[]) => void,
+    onError?: () => void,
+  ): () => void
 }
 
 export interface MapRepository {

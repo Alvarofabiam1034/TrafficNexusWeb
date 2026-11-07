@@ -21,6 +21,17 @@ export interface InventoryItem {
   readonly unit: InventoryUnit
   /** Posición del ítem dentro de su grupo. Cero es el primero. */
   readonly sortIndex: number
+  /**
+   * Umbral de alerta para consumibles. `null` la deja apagada.
+   * En herramientas no se usa.
+   */
+  readonly lowStockThreshold: number | null
+}
+
+/** Entero ≥ 0, o `null` si el servidor no manda umbral (o manda uno que no aplica). */
+export function readLowStockThreshold(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) return null
+  return value
 }
 
 /** Sugiere unidad al crear: cables → metros; resto → unidades. */

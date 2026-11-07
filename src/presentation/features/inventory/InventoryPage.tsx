@@ -43,6 +43,7 @@ import {
   INVENTORY_MAX_GROUP_LENGTH,
   INVENTORY_MAX_NAME_LENGTH,
   normalizeText,
+  parseLowStockThresholdInput,
   validateGroupRename,
   validateInventoryItem,
 } from '@/domain/validation/inventoryValidator'
@@ -428,21 +429,26 @@ function ItemRow({
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(item.name)
   const [unit, setUnit] = useState<InventoryUnit>(item.unit)
+  const [threshold, setThreshold] = useState(item.lowStockThreshold === null ? '' : String(item.lowStockThreshold))
   const [confirm, setConfirm] = useState(false)
   const [blocked, setBlocked] = useState(false)
+  const isConsumable = group.kind === 'CONSUMABLE'
+  const thresholdInput = parseLowStockThresholdInput(threshold)
 
   const error = editing ? validateInventoryItem(name, group.name, groups, item.id).nameError : null
   const nameChanged = normalizeText(name) !== item.name
   const unitChanged = unit !== item.unit
-  const canSave = !error && (nameChanged || unitChanged)
+  const thresholdChanged = isConsumable && thresholdInput.error === null && thresholdInput.value !== item.lowStockThreshold
+  const canSave = !error && thresholdInput.error === null && (nameChanged || unitChanged || thresholdChanged)
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     if (error || !canSave) return
     const next = normalizeText(name)
-    const patch: { name?: string; unit?: InventoryUnit } = {}
+    const patch: { name?: string; unit?: InventoryUnit; lowStockThreshold?: number | null } = {}
     if (nameChanged) patch.name = next
     if (unitChanged) patch.unit = unit
+    if (thresholdChanged) patch.lowStockThreshold = thresholdInput.value
     try {
       await update.mutateAsync({ itemId: item.id, patch })
       setEditing(false)
@@ -455,6 +461,7 @@ function ItemRow({
   const startEdit = () => {
     setName(item.name)
     setUnit(item.unit)
+    setThreshold(item.lowStockThreshold === null ? '' : String(item.lowStockThreshold))
     setEditing(true)
   }
 
@@ -492,6 +499,19 @@ function ItemRow({
               </option>
             ))}
           </SelectField>
+          {isConsumable ? (
+            <div className="inventory-item__threshold">
+              <TextField
+                label="Alerta si stock ≤"
+                inputMode="numeric"
+                placeholder="Sin alerta"
+                value={threshold}
+                onChange={(event) => setThreshold(event.target.value)}
+                error={thresholdInput.error ? 'Usa un entero mayor o igual que 0' : null}
+                hint="Vacío la deja apagada. 0 avisa cuando no queda nada."
+              />
+            </div>
+          ) : null}
         </div>
         <IconButton label="Guardar" type="submit" size="sm" accent disabled={update.isPending || !canSave}>
           <Check />
@@ -510,6 +530,11 @@ function ItemRow({
         <span className="inventory-item__unit" title={unitLabel[item.unit]}>
           {unitShortLabel[item.unit]}
         </span>
+        {isConsumable && item.lowStockThreshold !== null ? (
+          <span className="inventory-item__alert" title={`Alerta si el stock baja a ${item.lowStockThreshold} o menos`}>
+            ≤ {item.lowStockThreshold}
+          </span>
+        ) : null}
       </span>
       {isAdmin ? (
         <div className="inventory-item__actions">
@@ -584,13 +609,18 @@ function AddItemDialog({
   const [kind, setKind] = useState<CatalogGroupKind | ''>('')
   const [unit, setUnit] = useState<InventoryUnit>('UNITS')
   const [unitTouched, setUnitTouched] = useState(false)
+  const [threshold, setThreshold] = useState('')
   const [touched, setTouched] = useState(false)
 
   const validation = validateInventoryItem(name, groupName, groups)
   const existing = findGroup(groups, groupName)
   const needsKind = !existing && normalizeText(groupName).length > 0
+  const resolvedKind = existing ? existing.kind : kind || null
+  const showThreshold = resolvedKind === 'CONSUMABLE'
+  const thresholdInput = parseLowStockThresholdInput(threshold)
   const kindError = touched && needsKind && !kind ? 'Un grupo nuevo necesita un tipo' : null
-  const isValid = validation.isValid && (!needsKind || kind !== '')
+  const thresholdError = showThreshold ? thresholdInput.error : null
+  const isValid = validation.isValid && (!needsKind || kind !== '') && !thresholdError
 
   const onNameChange = (value: string) => {
     setName(value)
@@ -607,6 +637,7 @@ function AddItemDialog({
         groupName: canonicalGroupName(groupName, groups),
         kind: existing ? null : (kind || null),
         unit,
+        lowStockThreshold: showThreshold ? thresholdInput.value : null,
       })
       toast.success('Ítem agregado')
       onClose()
@@ -693,6 +724,17 @@ function AddItemDialog({
             </option>
           ))}
         </SelectField>
+        {showThreshold ? (
+          <TextField
+            label="Alerta si stock ≤"
+            inputMode="numeric"
+            placeholder="Sin alerta"
+            value={threshold}
+            onChange={(event) => setThreshold(event.target.value)}
+            error={touched && thresholdError ? 'Usa un entero mayor o igual que 0' : null}
+            hint="Opcional. Vacío la deja apagada."
+          />
+        ) : null}
         {existing && !existing.kind ? (
           <InlineMessage kind="info">Este grupo aún no tiene tipo. Defínelo desde su menú para habilitar chequeos o consumos.</InlineMessage>
         ) : null}

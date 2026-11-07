@@ -14,7 +14,7 @@ import {
   Wrench,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { useIsAdmin } from '@/application/ContainerContext'
 import {
@@ -73,7 +73,14 @@ function VehicleDetail({ vehicle }: { vehicle: Vehicle }) {
   const isAdmin = useIsAdmin()
   const toast = useToast()
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const focusLineId = params.get('line')
   const [tab, setTab] = useState<Tab>('KITS')
+  const [lineTracked, setLineTracked] = useState(focusLineId)
+  if (focusLineId !== lineTracked) {
+    setLineTracked(focusLineId)
+    if (focusLineId) setTab('KITS')
+  }
   const [assigning, setAssigning] = useState(false)
   const [renaming, setRenaming] = useState(0) // 0 = cerrado; otro valor remonta el diálogo limpio
   const [pendingRemove, setPendingRemove] = useState<VehicleKit | null>(null)
@@ -84,6 +91,20 @@ function VehicleDetail({ vehicle }: { vehicle: Vehicle }) {
   const toolKits = vehicle.kits.filter((kit) => kit.kind === 'TOOL').length
   const consumableKits = vehicle.kits.filter((kit) => kit.kind === 'CONSUMABLE').length
   const untypedKits = vehicle.kits.length - toolKits - consumableKits
+
+  const focusKitId =
+    vehicle.kits.find((item) => item.lines.some((line) => line.id === focusLineId))?.id ?? null
+  const focusCollapsed = focusKitId !== null && collapse.isCollapsed(focusKitId)
+  const expandKit = collapse.expand
+
+  useEffect(() => {
+    if (!focusLineId) return
+    if (focusKitId && focusCollapsed) expandKit(focusKitId)
+    const frame = requestAnimationFrame(() => {
+      document.getElementById(`kit-line-${focusLineId}`)?.scrollIntoView({ block: 'center' })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [focusLineId, focusKitId, focusCollapsed, expandKit])
 
   const confirmRemove = async () => {
     if (!pendingRemove) return
@@ -170,6 +191,7 @@ function VehicleDetail({ vehicle }: { vehicle: Vehicle }) {
                     kit={kit}
                     isAdmin={isAdmin}
                     collapsed={collapse.isCollapsed(kit.id)}
+                    focusLineId={focusLineId}
                     onToggle={() => collapse.toggle(kit.id)}
                     onRemove={() => setPendingRemove(kit)}
                     onReassign={() => setReassigning(kit)}
@@ -238,6 +260,7 @@ function KitCard({
   kit,
   isAdmin,
   collapsed,
+  focusLineId,
   onToggle,
   onRemove,
   onReassign,
@@ -246,6 +269,7 @@ function KitCard({
   kit: VehicleKit
   isAdmin: boolean
   collapsed: boolean
+  focusLineId: string | null
   onToggle: () => void
   onRemove: () => void
   onReassign: () => void
@@ -315,7 +339,16 @@ function KitCard({
       {kit.lines.length === 0 ? (
         <div className="kit-empty">El grupo no tiene ítems en el inventario.</div>
       ) : (
-        kit.lines.map((line) => <KitLineRow key={line.id} vehicleId={vehicleId} kit={kit} line={line} isAdmin={isAdmin} />)
+        kit.lines.map((line) => (
+          <KitLineRow
+            key={line.id}
+            vehicleId={vehicleId}
+            kit={kit}
+            line={line}
+            isAdmin={isAdmin}
+            focused={line.id === focusLineId}
+          />
+        ))
       )}
       {!kit.kind ? (
         <div style={{ padding: '0 12px 12px' }}>
@@ -342,11 +375,13 @@ function KitLineRow({
   kit,
   line,
   isAdmin,
+  focused,
 }: {
   vehicleId: string
   kit: VehicleKit
   line: KitLine
   isAdmin: boolean
+  focused: boolean
 }) {
   const toast = useToast()
   const adjust = useAdjustLine()
@@ -421,7 +456,7 @@ function KitLineRow({
   }
 
   return (
-    <div className="kit-line cgroup-row">
+    <div id={`kit-line-${line.id}`} className={['kit-line', 'cgroup-row', focused ? 'kit-line--focus' : ''].filter(Boolean).join(' ')}>
       <div className="kit-line__meta">
         <span className="kit-line__name">
           {line.itemName}

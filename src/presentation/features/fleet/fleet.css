@@ -71,6 +71,11 @@
   border-top: 1px solid var(--outline-variant);
 }
 
+.kit-line--focus {
+  background: var(--tone-caution-bg);
+  box-shadow: inset 3px 0 0 var(--tone-caution);
+}
+
 .kit-line__meta {
   flex: 1;
   min-width: 0;

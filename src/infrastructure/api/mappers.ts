@@ -18,7 +18,7 @@ import type {
   VehicleKit,
 } from '@/domain/model/fleet'
 import type { InventoryGroup, InventoryItem } from '@/domain/model/inventory'
-import { isCatalogKind, isInventoryUnit } from '@/domain/model/inventory'
+import { isCatalogKind, isInventoryUnit, readLowStockThreshold } from '@/domain/model/inventory'
 import type { MapLine, MapPlace, MapVersion, MapVersionSummary, StoredMap } from '@/domain/model/map'
 import type { CrewShift, Weekday } from '@/domain/model/shift'
 import { isWeekday } from '@/domain/model/shift'
@@ -163,6 +163,7 @@ export function toInventoryItem(dto: InventoryItemDto): InventoryItem {
     name: text(dto.name),
     unit: isInventoryUnit(dto.unit) ? dto.unit : 'UNITS',
     sortIndex: int(dto.sortIndex),
+    lowStockThreshold: readLowStockThreshold(dto.lowStockThreshold),
   }
 }
 

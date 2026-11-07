@@ -3,7 +3,12 @@ import { describe, expect, it } from 'vitest'
 import type { InventoryGroup } from '../model/inventory'
 import { validateEmail, validatePassword } from './appUserValidator'
 import { formatPhone, formatPlate, validateName, validatePhone, validatePlate } from './crewValidator'
-import { canonicalGroupName, validateGroupRename, validateInventoryItem } from './inventoryValidator'
+import {
+  canonicalGroupName,
+  parseLowStockThresholdInput,
+  validateGroupRename,
+  validateInventoryItem,
+} from './inventoryValidator'
 
 describe('crewValidator', () => {
   it('valida placas de carro y moto', () => {
@@ -41,7 +46,7 @@ describe('inventoryValidator', () => {
       name: 'Ópticas',
       kind: 'CONSUMABLE',
       sortIndex: 0,
-      items: [{ id: 'i1', name: 'Lente rojo 200', unit: 'UNITS', sortIndex: 0 }],
+      items: [{ id: 'i1', name: 'Lente rojo 200', unit: 'UNITS', sortIndex: 0, lowStockThreshold: null }],
     },
   ]
 
@@ -60,6 +65,16 @@ describe('inventoryValidator', () => {
     expect(validateGroupRename('Ópticas LED', 'Ópticas', groups)).toBeNull()
     expect(validateGroupRename('opticas', 'Cables', groups)).toBe('DUPLICATE')
     expect(validateGroupRename('O', 'Ópticas', groups)).toBe('TOO_SHORT')
+  })
+
+  it('interpreta el umbral de stock', () => {
+    expect(parseLowStockThresholdInput('')).toEqual({ value: null, error: null })
+    expect(parseLowStockThresholdInput('  ')).toEqual({ value: null, error: null })
+    expect(parseLowStockThresholdInput('0')).toEqual({ value: 0, error: null })
+    expect(parseLowStockThresholdInput('05')).toEqual({ value: 5, error: null })
+    expect(parseLowStockThresholdInput('5.5').error).toBe('INVALID')
+    expect(parseLowStockThresholdInput('-1').error).toBe('INVALID')
+    expect(parseLowStockThresholdInput('cinco').error).toBe('INVALID')
   })
 })
 

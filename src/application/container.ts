@@ -9,6 +9,7 @@ import type {
   PreferencesRepository,
   ProjectRepository,
   SessionRepository,
+  StockAlertRepository,
   UserRepository,
   WorkOrderRepository,
 } from '@/domain/repository'
@@ -21,6 +22,7 @@ import {
   ApiMapRepository,
   ApiProjectRepository,
   ApiSessionRepository,
+  ApiStockAlertRepository,
   ApiUserRepository,
   ApiWorkOrderRepository,
 } from '@/infrastructure/api/repositories'
@@ -43,6 +45,7 @@ export interface AppContainer {
   readonly workOrders: WorkOrderRepository
   readonly evidences: EvidenceRepository
   readonly duties: DutyRepository
+  readonly stockAlerts: StockAlertRepository
 }
 
 /**
@@ -76,5 +79,6 @@ export function createContainer(baseUrl: string = import.meta.env.VITE_API_BASE_
     workOrders: new ApiWorkOrderRepository(http),
     evidences: new ApiEvidenceRepository(http),
     duties: new ApiDutyRepository(http),
+    stockAlerts: new ApiStockAlertRepository(http),
   }
 }

@@ -37,12 +37,14 @@ export function useCreateItem() {
       groupName,
       kind,
       unit,
+      lowStockThreshold,
     }: {
       name: string
       groupName: string
       kind: CatalogGroupKind | null
       unit: InventoryUnit
-    }) => inventory.createItem(projectId, name, groupName, kind, unit),
+      lowStockThreshold?: number | null
+    }) => inventory.createItem(projectId, name, groupName, kind, unit, lowStockThreshold),
     onSuccess: invalidate,
   })
 }

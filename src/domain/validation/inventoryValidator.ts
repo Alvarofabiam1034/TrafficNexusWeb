@@ -77,3 +77,21 @@ export function findGroup(groups: readonly InventoryGroup[], name: string): Inve
   const key = textKey(name)
   return groups.find((g) => textKey(g.name) === key)
 }
+
+export type ThresholdInputError = 'INVALID'
+
+/**
+ * Campo «Alerta si stock ≤». Vacío apaga la alerta (`null`).
+ * Cualquier otro valor tiene que ser un entero ≥ 0.
+ */
+export function parseLowStockThresholdInput(raw: string): {
+  value: number | null
+  error: ThresholdInputError | null
+} {
+  const text = raw.trim()
+  if (text.length === 0) return { value: null, error: null }
+  if (!/^\d+$/.test(text)) return { value: null, error: 'INVALID' }
+  const value = Number(text)
+  if (!Number.isSafeInteger(value)) return { value: null, error: 'INVALID' }
+  return { value, error: null }
+}

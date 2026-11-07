@@ -56,6 +56,16 @@ export class HttpClient {
     return this.request<T>({ method: 'DELETE', path })
   }
 
+  /**
+   * SSE. `EventSource` no puede mandar `Authorization`, así que el JWT va en
+   * `access_token`. El llamador cierra el stream.
+   */
+  openEventSource(path: string): EventSource {
+    const token = this.tokens.token()
+    if (!token) throw new DomainError('UNAUTHORIZED', 'No hay sesión')
+    return new EventSource(this.buildUrl(path, { access_token: token }))
+  }
+
   private async request<T>(options: RequestOptions): Promise<T> {
     const url = this.buildUrl(options.path, options.query)
     const headers = new Headers({ Accept: 'application/json' })

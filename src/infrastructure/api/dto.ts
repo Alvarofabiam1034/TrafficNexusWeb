@@ -148,6 +148,7 @@ export interface InventoryItemDto {
   name?: string
   unit?: string
   sortIndex?: number
+  lowStockThreshold?: number | null
 }
 
 export interface InventoryGroupDto {
