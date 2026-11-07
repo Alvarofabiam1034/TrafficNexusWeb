@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
+import { workfrontStroke } from '@/domain/map/workfronts'
 import { argbToCss, type MapLine, type MapPlace } from '@/domain/model/map'
 import {
   BOGOTA,
@@ -117,7 +118,7 @@ export function GoogleMapView({
 
     for (const line of lines) {
       const path = line.points.map((point) => ({ lat: point.latitude, lng: point.longitude }))
-      const color = argbToCss(line.colorArgb)
+      const color = workfrontStroke(line.name) ?? argbToCss(line.colorArgb)
       const weight = Math.max(2, line.width / 2)
       const existing = polylinesRef.current.get(line.id)
       if (existing) {

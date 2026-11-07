@@ -23,7 +23,7 @@ import type { Crew } from '@/domain/model/crew'
 import { messageOf } from '@/domain/errors'
 import { drivePreviewUrl } from '@/domain/map/drivePreview'
 import { ACTIVE_STATES, activeStateOf, isActiveOrder, ordersByPlace } from '@/domain/map/placeOrders'
-import { workfronts, type Workfront } from '@/domain/map/workfronts'
+import { workfrontColor, workfronts, type Workfront } from '@/domain/map/workfronts'
 import { EMPTY_MAP, type MapPlace, type StoredMap } from '@/domain/model/map'
 import {
   externalNumberFromPlaceName,
@@ -113,7 +113,7 @@ function ExternalsMap({
   const [layersOpen, setLayersOpen] = useState(false)
   const [importing, setImporting] = useState(false)
   const [target, setTarget] = useState<MapCameraTarget | null>(null)
-  const [trackingOpen, setTrackingOpen] = useState(() => window.matchMedia(WIDE_SCREEN).matches)
+  const [trackingOpen, setTrackingOpen] = useState(false)
   const orders = useWorkOrders()
   const crews = useCrews()
 
@@ -325,7 +325,8 @@ function ExternalsMap({
               className={['chip', workfront === front.number ? 'chip--selected' : ''].join(' ')}
               onClick={() => chooseFront(front.number)}
             >
-              <Route size={14} /> WF{front.number}
+              <span className="externals__wf-dot" style={{ background: workfrontColor(front.number) }} />
+              WF{front.number}
             </button>
           ))}
         </div>

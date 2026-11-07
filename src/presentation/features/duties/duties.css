@@ -100,9 +100,7 @@
   padding: 22px 24px;
   border-radius: var(--radius-lg);
   border: 1px solid var(--outline-variant);
-  background:
-    radial-gradient(120% 140% at 0% 0%, var(--hero-glow) 0%, transparent 55%),
-    linear-gradient(180deg, var(--surface-high), var(--surface));
+  background: var(--surface);
 }
 
 .dd-hero::before {
@@ -114,13 +112,11 @@
 }
 
 .dd-hero--open {
-  --hero-glow: rgba(0, 214, 160, 0.14);
-  --hero-bar: linear-gradient(90deg, var(--brand-accent), #42a5f5);
+  --hero-bar: var(--brand-accent);
 }
 
 .dd-hero--closed {
-  --hero-glow: rgba(67, 85, 112, 0.35);
-  --hero-bar: linear-gradient(90deg, var(--brand-primary), var(--brand-surface));
+  --hero-bar: var(--brand-primary);
 }
 
 .dd-hero__head {
@@ -194,7 +190,7 @@
   border-radius: var(--radius-md);
   border: 1px solid var(--outline-variant);
   border-top: 3px solid var(--stat-fg);
-  background: linear-gradient(180deg, var(--stat-bg), var(--surface) 85%);
+  background: var(--surface);
   color: var(--fg);
   font: inherit;
   text-align: left;

@@ -92,7 +92,6 @@
 .cgroup {
   --tone: var(--status-caution);
   --tone-bg: rgba(255, 201, 40, 0.14);
-  --tone-glow: rgba(255, 201, 40, 0.1);
 
   border-radius: var(--radius-lg);
   border: 1px solid var(--outline-variant);
@@ -109,13 +108,11 @@
 .cgroup--tool {
   --tone: #64b5f6;
   --tone-bg: rgba(66, 165, 245, 0.16);
-  --tone-glow: rgba(66, 165, 245, 0.12);
 }
 
 .cgroup--consumable {
   --tone: #2ee6b0;
   --tone-bg: rgba(0, 185, 130, 0.16);
-  --tone-glow: rgba(0, 214, 160, 0.1);
 }
 
 .cgroup__head {
@@ -124,9 +121,7 @@
   gap: 12px;
   padding: 14px 12px 14px 16px;
   border-radius: calc(var(--radius-lg) - 3px) calc(var(--radius-lg) - 3px) 0 0;
-  background:
-    radial-gradient(120% 160% at 0% 0%, var(--tone-glow) 0%, transparent 60%),
-    var(--surface-high);
+  background: var(--surface-high);
   transition: border-radius 0.2s ease;
 }
 

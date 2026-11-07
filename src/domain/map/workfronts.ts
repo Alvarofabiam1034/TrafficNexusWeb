@@ -9,6 +9,34 @@ export interface Workfront {
 const EARTH_RADIUS_METERS = 6_371_000
 const WORKFRONT_NAME = /WF\s*(\d+)/i
 
+/** Colores distinguibles entre sí y del verde de los puntos sin OT. Se repiten a partir del WF 13. */
+const WORKFRONT_COLORS = [
+  '#FF6B6B',
+  '#4C6EF5',
+  '#FF922B',
+  '#BE4BDB',
+  '#15AABF',
+  '#F06595',
+  '#FAB005',
+  '#7950F2',
+  '#82C91E',
+  '#FF8787',
+  '#22B8CF',
+  '#E599F7',
+] as const
+
+/** Color estable del frente: todas las polilíneas de un mismo WF comparten color. */
+export function workfrontColor(number: number): string {
+  const index = ((Math.trunc(number) - 1) % WORKFRONT_COLORS.length + WORKFRONT_COLORS.length) % WORKFRONT_COLORS.length
+  return WORKFRONT_COLORS[index] ?? WORKFRONT_COLORS[0]
+}
+
+/** Color del trazo cuando su nombre identifica un frente. Null si no es un WF. */
+export function workfrontStroke(lineName: string): string | null {
+  const number = workfrontNumber(lineName)
+  return number === null ? null : workfrontColor(number)
+}
+
 /**
  * Un lugar entra al workfront del trazo más cercano cuando está a esta distancia o menos.
  * Más allá queda solo en la vista general: no pertenece con claridad a ningún corredor.
