@@ -12,8 +12,25 @@ import {
 import { ErrorState, Loading } from '@/presentation/components/States'
 
 const PLACE_COLOR = '#00D6A0'
+const ADDRESS_COLOR = '#FF8A65'
 const CREW_FRESH = '#00D6A0'
 const CREW_STALE = '#9AA5B4'
+
+/** Requerimiento ya creado. No es un punto del mapa de externos. */
+export interface RequirementMapPin {
+  readonly id: string
+  readonly title: string
+  readonly latitude: number
+  readonly longitude: number
+  readonly color: string
+}
+
+/** Dirección encontrada, antes de crear el requerimiento. */
+export interface AddressMapPin {
+  readonly latitude: number
+  readonly longitude: number
+  readonly title: string
+}
 
 /** Pin de cuadrilla. Solo la última posición, nunca un recorrido. */
 export interface CrewMapPin {
@@ -130,6 +147,10 @@ interface GoogleMapViewProps {
   crewsVisible?: boolean
   selectedCrewId?: string | null
   onSelectCrew?: (crewId: string) => void
+  requirements?: readonly RequirementMapPin[]
+  selectedRequirementId?: string | null
+  onSelectRequirement?: (id: string) => void
+  addressPin?: AddressMapPin | null
 }
 
 export function GoogleMapView({
@@ -145,6 +166,10 @@ export function GoogleMapView({
   crewsVisible = false,
   selectedCrewId = null,
   onSelectCrew = () => {},
+  requirements = [],
+  selectedRequirementId = null,
+  onSelectRequirement = () => {},
+  addressPin = null,
 }: GoogleMapViewProps) {
   const hostRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<google.maps.Map | null>(null)
@@ -152,8 +177,11 @@ export function GoogleMapView({
   const polylinesRef = useRef<Map<string, google.maps.Polyline>>(new Map())
   const crewPinsRef = useRef<Map<string, CrewPinHandle>>(new Map())
   const crewCirclesRef = useRef<Map<string, google.maps.Circle>>(new Map())
+  const requirementMarkersRef = useRef<Map<string, google.maps.Marker>>(new Map())
+  const addressMarkerRef = useRef<google.maps.Marker | null>(null)
   const onSelectRef = useRef(onSelectPlace)
   const onSelectCrewRef = useRef(onSelectCrew)
+  const onSelectRequirementRef = useRef(onSelectRequirement)
 
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -161,6 +189,7 @@ export function GoogleMapView({
   useEffect(() => {
     onSelectRef.current = onSelectPlace
     onSelectCrewRef.current = onSelectCrew
+    onSelectRequirementRef.current = onSelectRequirement
   })
 
   useEffect(() => {
@@ -299,6 +328,69 @@ export function GoogleMapView({
     }
   }, [places, pointsVisible, selectedPlaceId, placeColors, ready])
 
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !ready) return
+    const keep = new Set(requirements.map((pin) => pin.id))
+    for (const [id, marker] of requirementMarkersRef.current) {
+      if (!keep.has(id)) {
+        google.maps.event.clearInstanceListeners(marker)
+        marker.setMap(null)
+        requirementMarkersRef.current.delete(id)
+      }
+    }
+    for (const pin of requirements) {
+      const selected = pin.id === selectedRequirementId
+      const icon = circleIcon(pin.color, selected, true)
+      const position = { lat: pin.latitude, lng: pin.longitude }
+      const existing = requirementMarkersRef.current.get(pin.id)
+      if (existing) {
+        existing.setPosition(position)
+        existing.setIcon(icon)
+        existing.setTitle(pin.title)
+        existing.setZIndex(selected ? 5 : 4)
+        continue
+      }
+      const marker = new google.maps.Marker({
+        map,
+        position,
+        icon,
+        title: pin.title,
+        zIndex: selected ? 5 : 4,
+        optimized: true,
+      })
+      marker.addListener('click', () => onSelectRequirementRef.current(pin.id))
+      requirementMarkersRef.current.set(pin.id, marker)
+    }
+  }, [requirements, selectedRequirementId, ready])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !ready) return
+    if (!addressPin) {
+      addressMarkerRef.current?.setMap(null)
+      addressMarkerRef.current = null
+      return
+    }
+    const position = { lat: addressPin.latitude, lng: addressPin.longitude }
+    const icon = circleIcon(ADDRESS_COLOR, true, true)
+    const existing = addressMarkerRef.current
+    if (existing) {
+      existing.setPosition(position)
+      existing.setTitle(addressPin.title)
+      existing.setMap(map)
+      return
+    }
+    addressMarkerRef.current = new google.maps.Marker({
+      map,
+      position,
+      icon,
+      title: addressPin.title,
+      zIndex: 6,
+      optimized: true,
+    })
+  }, [addressPin, ready])
+
   // Cuadrillas: pin con placa y radio de precisión. Se actualiza en el sitio.
   useEffect(() => {
     const map = mapRef.current
@@ -336,6 +428,7 @@ export function GoogleMapView({
     const crewPins = crewPinsRef.current
     const crewCircles = crewCirclesRef.current
     const markers = markersRef.current
+    const requirementMarkers = requirementMarkersRef.current
     const polylines = polylinesRef.current
     return () => {
       for (const marker of markers.values()) {
@@ -343,6 +436,13 @@ export function GoogleMapView({
         marker.setMap(null)
       }
       markers.clear()
+      for (const marker of requirementMarkers.values()) {
+        google.maps.event.clearInstanceListeners(marker)
+        marker.setMap(null)
+      }
+      requirementMarkers.clear()
+      addressMarkerRef.current?.setMap(null)
+      addressMarkerRef.current = null
       for (const polyline of polylines.values()) polyline.setMap(null)
       polylines.clear()
       for (const pin of crewPins.values()) pin.setMap(null)

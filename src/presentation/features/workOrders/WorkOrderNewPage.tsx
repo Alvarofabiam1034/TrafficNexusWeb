@@ -12,7 +12,13 @@ import {
 } from '@/application/hooks/useWorkOrders'
 import { DomainError, messageOf } from '@/domain/errors'
 import type { Crew } from '@/domain/model/crew'
-import type { WorkOrderItemInput } from '@/domain/model/workOrder'
+import {
+  WORK_ORDER_INSTRUCTIONS_MAX,
+  WORK_ORDER_TITLE_MAX,
+  workOrderKindLabel,
+  type WorkOrderItemInput,
+  type WorkOrderKind,
+} from '@/domain/model/workOrder'
 import { isOnShiftAt } from '@/domain/schedule/scheduleRules'
 import { formatPlate } from '@/domain/validation/crewValidator'
 import { routes } from '@/presentation/app/routes'
@@ -43,11 +49,35 @@ function parseCoord(value: string | null): number | null {
 export default function WorkOrderNewPage() {
   const isAdmin = useIsAdmin()
   const [params] = useSearchParams()
+  const kind = readKind(params.get('kind'))
   const placeId = params.get('placeId')?.trim() ?? ''
+  const address = params.get('address')?.trim() ?? ''
+  const latitude = parseCoord(params.get('lat'))
+  const longitude = parseCoord(params.get('lng'))
 
   if (!isAdmin) return <Navigate to={routes.workOrders} replace />
+  if (kind === 'REQUIREMENT') {
+    if (!address || latitude === null || longitude === null) return <Navigate to={routes.externals} replace />
+    return <InstructionOrderForm kind="REQUIREMENT" address={address} latitude={latitude} longitude={longitude} />
+  }
   if (!placeId) return <Navigate to={routes.externals} replace />
+  if (kind === 'PREVENTIVE') {
+    return (
+      <InstructionOrderForm
+        kind="PREVENTIVE"
+        placeId={placeId}
+        placeName={params.get('placeName')?.trim() ?? ''}
+        latitude={latitude}
+        longitude={longitude}
+      />
+    )
+  }
   return <WorkOrderNewForm placeId={placeId} />
+}
+
+function readKind(value: string | null): WorkOrderKind {
+  if (value === 'PREVENTIVE' || value === 'REQUIREMENT') return value
+  return 'CORRECTIVE'
 }
 
 function WorkOrderNewForm({ placeId }: { placeId: string }) {
@@ -372,6 +402,208 @@ function WorkOrderNewForm({ placeId }: { placeId: string }) {
                   Asignar orden
                 </Button>
                 <Button variant="outlined" onClick={() => void saveDraft()} disabled={busy || !extracted}>
+                  Guardar borrador
+                </Button>
+                <Button variant="text" onClick={() => navigate(routes.externals)} disabled={busy}>
+                  Cancelar
+                </Button>
+              </div>
+            </aside>
+          </div>
+        ) : null}
+      </div>
+    </>
+  )
+}
+
+function InstructionOrderForm({
+  kind,
+  placeId,
+  placeName,
+  address,
+  latitude,
+  longitude,
+}: {
+  kind: 'PREVENTIVE' | 'REQUIREMENT'
+  placeId?: string
+  placeName?: string
+  address?: string
+  latitude: number | null
+  longitude: number | null
+}) {
+  const navigate = useNavigate()
+  const toast = useToast()
+  const now = useNow()
+  const crews = useCrews()
+  const create = useCreateWorkOrder()
+  const update = useUpdateWorkOrder()
+  const assign = useAssignWorkOrder()
+
+  const [title, setTitle] = useState('')
+  const [instructions, setInstructions] = useState('')
+  const [crewId, setCrewId] = useState('')
+  const [workOrderId, setWorkOrderId] = useState<string | null>(null)
+  const [touched, setTouched] = useState(false)
+
+  const busy = create.isPending || update.isPending || assign.isPending
+  const anchorLabel = kind === 'REQUIREMENT' ? address || 'Dirección' : placeName || 'Punto del mapa'
+  const mapsUrl =
+    latitude !== null && longitude !== null
+      ? `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
+      : null
+
+  const titleError = !title.trim()
+    ? 'Indica un título'
+    : title.trim().length > WORK_ORDER_TITLE_MAX
+      ? `Máximo ${WORK_ORDER_TITLE_MAX} caracteres`
+      : null
+  const instructionsError = !instructions.trim()
+    ? 'Escribe las instrucciones'
+    : instructions.trim().length > WORK_ORDER_INSTRUCTIONS_MAX
+      ? `Máximo ${WORK_ORDER_INSTRUCTIONS_MAX} caracteres`
+      : null
+  const crewError = !crewId ? 'Selecciona una cuadrilla' : null
+  const fieldsReady = !titleError && !instructionsError
+
+  const persist = async (): Promise<string> => {
+    const fields = { title: title.trim(), instructions: instructions.trim() }
+    if (workOrderId) {
+      await update.mutateAsync({ workOrderId, draft: { kind, externalNumber: '', statusReported: '', parsedNotes: '', adminNotes: '', items: [], ...fields } })
+      return workOrderId
+    }
+    const created = await create.mutateAsync(
+      kind === 'REQUIREMENT'
+        ? { kind, address, latitude: latitude ?? undefined, longitude: longitude ?? undefined, ...fields }
+        : { kind, placeId, ...fields },
+    )
+    setWorkOrderId(created.id)
+    return created.id
+  }
+
+  const saveDraft = async () => {
+    setTouched(true)
+    if (!fieldsReady) return
+    try {
+      const id = await persist()
+      toast.success('Borrador guardado')
+      navigate(routes.workOrder(id))
+    } catch (error) {
+      toast.error(messageOf(error, 'No se pudo guardar el borrador'))
+    }
+  }
+
+  const assignOrder = async () => {
+    setTouched(true)
+    if (!fieldsReady || crewError) return
+    try {
+      const id = await persist()
+      await assign.mutateAsync({ workOrderId: id, crewId })
+      toast.success(`${workOrderKindLabel(kind)} asignado`)
+      navigate(routes.workOrder(id))
+    } catch (error) {
+      toast.error(
+        DomainError.hasCode(error, 'CREW_OUTSIDE_SCHEDULE')
+          ? messageOf(error, 'La cuadrilla está fuera de su franja horaria; no se puede asignar ahora')
+          : messageOf(error, 'No se pudo asignar la orden'),
+      )
+    }
+  }
+
+  const crewList = crews.data ?? []
+  const selectedCrew = crewList.find((crew) => crew.id === crewId)
+  const selectedOffShift = selectedCrew ? !isOnShiftAt(selectedCrew, now) : false
+
+  return (
+    <>
+      <PageHeader
+        title={`Nuevo ${workOrderKindLabel(kind).toLowerCase()}`}
+        subtitle={`${anchorLabel} · instrucciones para la cuadrilla`}
+        backTo={routes.externals}
+      />
+      <div className="page-body">
+        {crews.isPending ? <Loading /> : null}
+        {crews.data && crews.data.length === 0 ? (
+          <EmptyState
+            icon={<Plus />}
+            title="No hay cuadrillas"
+            body="Crea una cuadrilla antes de asignar órdenes de trabajo."
+            action={
+              <Button variant="outlined" onClick={() => navigate(routes.crews)}>
+                Ir a cuadrillas
+              </Button>
+            }
+          />
+        ) : null}
+        {crewList.length > 0 ? (
+          <div className="won">
+            <div className="won-main">
+              <Step number={1} title="Instrucciones" done={fieldsReady} hint="La cuadrilla verá este texto en el celular">
+                <TextField
+                  label="Título"
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  error={touched ? titleError : null}
+                  placeholder={kind === 'PREVENTIVE' ? 'Ej. Revisión de luminarias' : 'Ej. Señalización caída'}
+                />
+                <TextAreaField
+                  label="Instrucciones"
+                  value={instructions}
+                  onChange={(event) => setInstructions(event.target.value)}
+                  rows={7}
+                  error={touched ? instructionsError : null}
+                  placeholder="Qué debe hacer la cuadrilla, con el detalle que necesite."
+                />
+              </Step>
+            </div>
+            <aside className="won-side">
+              <section className="won-place">
+                <span className="won-place__icon">
+                  <MapPin />
+                </span>
+                <div className="won-place__text">
+                  <span className="won-place__label">{kind === 'REQUIREMENT' ? 'Dirección' : 'Punto del mapa'}</span>
+                  <span className="won-place__name">{anchorLabel}</span>
+                  {latitude !== null && longitude !== null ? (
+                    <span className="mono muted won-place__coords">
+                      {latitude.toFixed(6)}, {longitude.toFixed(6)}
+                    </span>
+                  ) : null}
+                </div>
+                {mapsUrl ? (
+                  <IconButton label="Abrir en Google Maps" size="sm" onClick={() => window.open(mapsUrl, '_blank', 'noopener,noreferrer')}>
+                    <ExternalLink />
+                  </IconButton>
+                ) : null}
+              </section>
+              <Step number={2} title="Cuadrilla" done={Boolean(crewId)} compact>
+                <div className="won-crews" role="radiogroup" aria-label="Cuadrilla">
+                  {crewList.map((crew, index) => (
+                    <CrewOption
+                      key={crew.id}
+                      crew={crew}
+                      number={index + 1}
+                      onShift={isOnShiftAt(crew, now)}
+                      selected={crew.id === crewId}
+                      disabled={false}
+                      onSelect={() => setCrewId(crew.id)}
+                    />
+                  ))}
+                </div>
+                {touched && crewError ? <p className="won-error">{crewError}</p> : null}
+                {selectedOffShift ? (
+                  <InlineMessage kind="info" icon={<TriangleAlert />}>
+                    Según su horario, la cuadrilla está fuera de turno. Si no se puede asignar ahora, guarda la orden como borrador.
+                  </InlineMessage>
+                ) : null}
+              </Step>
+              {create.isError || update.isError || assign.isError ? (
+                <InlineMessage>{messageOf(create.error ?? update.error ?? assign.error, 'No se pudo completar')}</InlineMessage>
+              ) : null}
+              <div className="won-actions">
+                <Button onClick={() => void assignOrder()} disabled={busy} loading={assign.isPending}>
+                  Asignar orden
+                </Button>
+                <Button variant="outlined" onClick={() => void saveDraft()} disabled={busy}>
                   Guardar borrador
                 </Button>
                 <Button variant="text" onClick={() => navigate(routes.externals)} disabled={busy}>

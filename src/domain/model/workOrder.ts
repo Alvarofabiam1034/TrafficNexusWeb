@@ -18,6 +18,32 @@ export function workOrderStateLabel(state: WorkOrderState): string {
   return WORK_ORDER_STATE_LABELS[state]
 }
 
+/** Tipo de la orden. El correctivo es el flujo de WhatsApp. */
+export const WORK_ORDER_KINDS = ['CORRECTIVE', 'PREVENTIVE', 'REQUIREMENT'] as const
+export type WorkOrderKind = (typeof WORK_ORDER_KINDS)[number]
+
+export function isWorkOrderKind(value: unknown): value is WorkOrderKind {
+  return typeof value === 'string' && (WORK_ORDER_KINDS as readonly string[]).includes(value)
+}
+
+const WORK_ORDER_KIND_LABELS: Record<WorkOrderKind, string> = {
+  CORRECTIVE: 'Correctivo',
+  PREVENTIVE: 'Preventivo',
+  REQUIREMENT: 'Requerimiento',
+}
+
+export function workOrderKindLabel(kind: WorkOrderKind): string {
+  return WORK_ORDER_KIND_LABELS[kind]
+}
+
+/** Preventivo y requerimiento llevan título e instrucciones del administrador, no un mensaje de WhatsApp. */
+export function isInstructionKind(kind: WorkOrderKind): boolean {
+  return kind === 'PREVENTIVE' || kind === 'REQUIREMENT'
+}
+
+export const WORK_ORDER_TITLE_MAX = 120
+export const WORK_ORDER_INSTRUCTIONS_MAX = 2000
+
 export function workOrderStateChipClass(state: WorkOrderState): string {
   switch (state) {
     case 'DRAFT':
@@ -66,6 +92,9 @@ export interface WorkOrder {
   readonly rawMessage: string
   readonly parsedNotes: string
   readonly adminNotes: string
+  readonly kind: WorkOrderKind
+  readonly title: string
+  readonly instructions: string
   readonly state: WorkOrderState
   readonly crewId: string | null
   readonly assignedAt: string | null
@@ -102,24 +131,34 @@ export interface WorkOrderItemInput {
 }
 
 export interface WorkOrderCreateDraft {
-  /** Place del mapa vigente; obligatorio en el API. */
-  readonly placeId: string
-  readonly rawMessage: string
+  readonly kind?: WorkOrderKind
+  /** Place del mapa vigente. Obligatorio en correctivo y preventivo. */
+  readonly placeId?: string
+  readonly rawMessage?: string
   readonly adminNotes?: string
   readonly externalNumber?: string
   readonly statusReported?: string
   readonly parsedNotes?: string
   readonly items?: readonly WorkOrderItemInput[]
+  readonly title?: string
+  readonly instructions?: string
+  /** Dirección encontrada. Solo requerimiento. */
+  readonly address?: string
+  readonly latitude?: number
+  readonly longitude?: number
 }
 
 export interface WorkOrderUpdateDraft {
+  readonly kind?: WorkOrderKind
   readonly externalNumber: string
   readonly statusReported: string
   readonly parsedNotes: string
   readonly adminNotes: string
   readonly items: readonly WorkOrderItemInput[]
-  /** Si se envía, revalida el mapa vigente y refresca el snapshot de place. */
+  /** Si se envía en un correctivo, revalida el mapa vigente y refresca el snapshot de place. */
   readonly placeId?: string
+  readonly title?: string
+  readonly instructions?: string
 }
 
 const PRIORITY_RANK: Record<string, number> = {

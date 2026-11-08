@@ -19,7 +19,7 @@ export function ordersByPlace(places: readonly MapPlace[], orders: readonly Work
   const result = new Map<string, WorkOrder[]>()
   const byId = new Map(places.map((place) => [place.id, place]))
   for (const order of orders) {
-    if (!order.place) continue
+    if (order.kind === 'REQUIREMENT' || !order.place?.id) continue
     const snapshot = order.place
     const place =
       byId.get(snapshot.id) ??

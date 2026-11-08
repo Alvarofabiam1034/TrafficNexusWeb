@@ -33,7 +33,7 @@ import type {
   WorkOrderItemInput,
   WorkOrderPlace,
 } from '@/domain/model/workOrder'
-import { isWorkOrderState } from '@/domain/model/workOrder'
+import { isWorkOrderKind, isWorkOrderState } from '@/domain/model/workOrder'
 import type { ShiftDraft } from '@/domain/repository'
 import { parseIso, toIso } from '@/domain/schedule/civilDate'
 
@@ -312,12 +312,15 @@ function toWorkOrderItem(dto: WorkOrderItemDto, index: number): WorkOrderItem {
 function toWorkOrderPlace(dto: WorkOrderPlaceDto | null | undefined): WorkOrderPlace | null {
   if (!dto) return null
   const id = text(dto.id)
-  if (!id) return null
+  const name = text(dto.name)
+  const latitude = num(dto.latitude)
+  const longitude = num(dto.longitude)
+  if (!id && !name && latitude === 0 && longitude === 0) return null
   return {
     id,
-    name: text(dto.name),
-    latitude: num(dto.latitude),
-    longitude: num(dto.longitude),
+    name,
+    latitude,
+    longitude,
     documentation: text(dto.documentation),
   }
 }
@@ -331,6 +334,9 @@ export function toWorkOrder(dto: WorkOrderDto): WorkOrder {
     rawMessage: text(dto.rawMessage),
     parsedNotes: text(dto.parsedNotes),
     adminNotes: text(dto.adminNotes),
+    kind: isWorkOrderKind(dto.kind) ? dto.kind : 'CORRECTIVE',
+    title: text(dto.title),
+    instructions: text(dto.instructions),
     state,
     crewId: dto.crewId ? text(dto.crewId) : null,
     assignedAt: dto.assignedAt ? text(dto.assignedAt) : null,

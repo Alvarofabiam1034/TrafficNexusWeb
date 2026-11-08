@@ -29,6 +29,8 @@
   left: 12px;
   right: 12px;
   display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
   gap: 8px;
   /* Por encima de los chips WF: la lista de búsqueda no debe quedar detrás. */
   z-index: 1100;
@@ -112,6 +114,31 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.externals__search-error {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 10px 14px;
+  background: var(--graphite-high);
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-md);
+  color: var(--fg);
+  font-size: 0.8125rem;
+}
+
+.externals__kind-copy {
+  margin: 0 0 4px;
+}
+
+.externals__kind-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .externals__actions {

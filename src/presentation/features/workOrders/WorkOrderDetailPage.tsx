@@ -9,7 +9,11 @@ import { DomainError, messageOf } from '@/domain/errors'
 import { drivePreviewUrl } from '@/domain/map/drivePreview'
 import type { Crew } from '@/domain/model/crew'
 import {
+  isInstructionKind,
   maxPriority,
+  WORK_ORDER_INSTRUCTIONS_MAX,
+  WORK_ORDER_TITLE_MAX,
+  workOrderKindLabel,
   workOrderStateLabel,
   type WorkOrder,
   type WorkOrderItemInput,
@@ -52,6 +56,8 @@ export default function WorkOrderDetailPage() {
   const [statusReported, setStatusReported] = useState('')
   const [parsedNotes, setParsedNotes] = useState('')
   const [adminNotes, setAdminNotes] = useState('')
+  const [title, setTitle] = useState('')
+  const [instructions, setInstructions] = useState('')
   const [items, setItems] = useState<WorkOrderItemInput[]>([])
   const [crewId, setCrewId] = useState('')
   const [hydratedId, setHydratedId] = useState<string | null>(null)
@@ -62,6 +68,8 @@ export default function WorkOrderDetailPage() {
     setStatusReported(data.statusReported)
     setParsedNotes(data.parsedNotes)
     setAdminNotes(data.adminNotes)
+    setTitle(data.title)
+    setInstructions(data.instructions)
     setItems(
       data.items.map((item) => ({
         externalId: item.externalId,
@@ -102,20 +110,48 @@ export default function WorkOrderDetailPage() {
   const priority = maxPriority(data.items)
   const tone = STATE_TONE[data.state]
   const canEdit = isAdmin && (data.state === 'DRAFT' || data.state === 'ASSIGNED')
+  const instruction = isInstructionKind(data.kind)
   const busy = update.isPending || assign.isPending
+  const titleError = !title.trim()
+    ? 'Indica un título'
+    : title.trim().length > WORK_ORDER_TITLE_MAX
+      ? `Máximo ${WORK_ORDER_TITLE_MAX} caracteres`
+      : null
+  const instructionsError = !instructions.trim()
+    ? 'Escribe las instrucciones'
+    : instructions.trim().length > WORK_ORDER_INSTRUCTIONS_MAX
+      ? `Máximo ${WORK_ORDER_INSTRUCTIONS_MAX} caracteres`
+      : null
 
-  const draft = () => ({
-    externalNumber: externalNumber.trim(),
-    statusReported: statusReported.trim(),
-    parsedNotes: parsedNotes.trim(),
-    adminNotes: adminNotes.trim(),
-    items: items.filter((item) => item.externalId.trim() || item.address.trim()),
-  })
+  const draft = () =>
+    instruction
+      ? {
+          kind: data.kind,
+          externalNumber: '',
+          statusReported: '',
+          parsedNotes: '',
+          adminNotes: '',
+          items: [],
+          title: title.trim(),
+          instructions: instructions.trim(),
+        }
+      : {
+          kind: data.kind,
+          externalNumber: externalNumber.trim(),
+          statusReported: statusReported.trim(),
+          parsedNotes: parsedNotes.trim(),
+          adminNotes: adminNotes.trim(),
+          items: items.filter((item) => item.externalId.trim() || item.address.trim()),
+        }
 
   const setItemField = (index: number, key: keyof WorkOrderItemInput, value: string) =>
     setItems((current) => current.map((row, i) => (i === index ? { ...row, [key]: value } : row)))
 
   const save = async () => {
+    if (instruction && (titleError || instructionsError)) {
+      toast.error(titleError ?? instructionsError ?? 'Revisa el formulario')
+      return
+    }
     try {
       await update.mutateAsync({ workOrderId: data.id, draft: draft() })
       toast.success('Orden actualizada')
@@ -130,9 +166,15 @@ export default function WorkOrderDetailPage() {
       return
     }
     try {
-      if (canEdit) await update.mutateAsync({ workOrderId: data.id, draft: draft() })
+      if (canEdit) {
+        if (instruction && (titleError || instructionsError)) {
+          toast.error(titleError ?? instructionsError ?? 'Revisa el formulario')
+          return
+        }
+        await update.mutateAsync({ workOrderId: data.id, draft: draft() })
+      }
       const next = await assign.mutateAsync({ workOrderId: data.id, crewId })
-      toast.success(`Asignada al externo ${next.externalNumber}`)
+      toast.success(instruction ? `${workOrderKindLabel(next.kind)} asignado` : `Asignada al externo ${next.externalNumber}`)
       navigate(routes.workOrder(next.id))
     } catch (error) {
       toast.error(
@@ -148,7 +190,7 @@ export default function WorkOrderDetailPage() {
   return (
     <>
       <PageHeader
-        title={data.externalNumber ? `Externo ${data.externalNumber}` : 'Orden'}
+        title={instruction ? data.title || workOrderKindLabel(data.kind) : data.externalNumber ? `Externo ${data.externalNumber}` : 'Orden'}
         subtitle={data.place?.name || undefined}
         backTo={routes.workOrders}
       />
@@ -157,10 +199,13 @@ export default function WorkOrderDetailPage() {
           <section className={`wo-hero wo-hero--${tone}`}>
             <div className="wo-hero__head">
               <div className="wo-hero__title">
-                <span className="wo-hero__label">Externo</span>
-                <span className="wo-hero__number">{data.externalNumber || '—'}</span>
+                <span className="wo-hero__label">{instruction ? workOrderKindLabel(data.kind) : 'Externo'}</span>
+                <span className="wo-hero__number">
+                  {instruction ? data.title || 'Sin título' : data.externalNumber || '—'}
+                </span>
               </div>
               <div className="wo-hero__chips">
+                <span className="tone-pill tone-pill--neutral">{workOrderKindLabel(data.kind)}</span>
                 <span className={`tone-pill tone-pill--dot tone-pill--${tone}`}>{workOrderStateLabel(data.state)}</span>
                 {data.statusReported ? <span className="tone-pill tone-pill--info">{data.statusReported}</span> : null}
                 {priority ? <span className={`tone-pill tone-pill--${priorityTone(priority)}`}>Prioridad {priority}</span> : null}
@@ -171,7 +216,26 @@ export default function WorkOrderDetailPage() {
 
           <div className="wo-layout">
             <div className="wo-main">
-              {canEdit ? (
+              {instruction && canEdit ? (
+                <WoCard title="Instrucciones">
+                  <TextField label="Título" value={title} onChange={(event) => setTitle(event.target.value)} error={titleError} />
+                  <TextAreaField
+                    label="Instrucciones"
+                    value={instructions}
+                    onChange={(event) => setInstructions(event.target.value)}
+                    rows={6}
+                    error={instructionsError}
+                  />
+                </WoCard>
+              ) : null}
+
+              {instruction && !canEdit && data.instructions ? (
+                <WoCard title="Instrucciones">
+                  <p className="wo-quote">{data.instructions}</p>
+                </WoCard>
+              ) : null}
+
+              {!instruction && canEdit ? (
                 <WoCard title="Datos de la orden">
                   <div className="wo-form-row">
                     <TextField label="Externo" value={externalNumber} onChange={(event) => setExternalNumber(event.target.value)} />
@@ -196,7 +260,7 @@ export default function WorkOrderDetailPage() {
                 </WoCard>
               ) : null}
 
-              {itemCount > 0 ? (
+              {!instruction && itemCount > 0 ? (
                 <WoCard title="IDs" badge={plural(itemCount, 'equipo', 'equipos')} flush>
                   <div className="wo-table-wrap">
                     <table className="wo-table">
@@ -246,7 +310,7 @@ export default function WorkOrderDetailPage() {
                 </WoCard>
               ) : null}
 
-              {!canEdit && (data.parsedNotes || data.adminNotes) ? (
+              {!instruction && !canEdit && (data.parsedNotes || data.adminNotes) ? (
                 <WoCard title="Contexto">
                   {data.parsedNotes ? (
                     <div className="wo-note">
@@ -267,7 +331,7 @@ export default function WorkOrderDetailPage() {
                 <WorkOrderEvidences workOrderId={data.id} externalNumber={data.externalNumber} canEditCaption={isAdmin} />
               </WoCard>
 
-              {data.rawMessage ? (
+              {!instruction && data.rawMessage ? (
                 <details className="wo-card wo-raw">
                   <summary>
                     <MessageSquareText aria-hidden /> Mensaje original

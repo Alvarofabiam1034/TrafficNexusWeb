@@ -488,27 +488,44 @@ export class ApiWorkOrderRepository implements WorkOrderRepository {
   }
 
   async create(projectId: string, draft: WorkOrderCreateDraft): Promise<WorkOrder> {
-    const body: Record<string, unknown> = {
-      placeId: draft.placeId,
-      rawMessage: draft.rawMessage,
+    const kind = draft.kind ?? 'CORRECTIVE'
+    const body: Record<string, unknown> = { kind }
+    if (kind === 'REQUIREMENT') {
+      body.address = draft.address ?? ''
+      body.latitude = draft.latitude
+      body.longitude = draft.longitude
+      body.title = draft.title ?? ''
+      body.instructions = draft.instructions ?? ''
+    } else if (kind === 'PREVENTIVE') {
+      body.placeId = draft.placeId ?? ''
+      body.title = draft.title ?? ''
+      body.instructions = draft.instructions ?? ''
+    } else {
+      body.placeId = draft.placeId ?? ''
+      body.rawMessage = draft.rawMessage ?? ''
+      if (draft.adminNotes !== undefined) body.adminNotes = draft.adminNotes
+      if (draft.externalNumber !== undefined) body.externalNumber = draft.externalNumber
+      if (draft.statusReported !== undefined) body.statusReported = draft.statusReported
+      if (draft.parsedNotes !== undefined) body.parsedNotes = draft.parsedNotes
+      if (draft.items !== undefined) body.items = draft.items.map(toWorkOrderItemRequest)
     }
-    if (draft.adminNotes !== undefined) body.adminNotes = draft.adminNotes
-    if (draft.externalNumber !== undefined) body.externalNumber = draft.externalNumber
-    if (draft.statusReported !== undefined) body.statusReported = draft.statusReported
-    if (draft.parsedNotes !== undefined) body.parsedNotes = draft.parsedNotes
-    if (draft.items !== undefined) body.items = draft.items.map(toWorkOrderItemRequest)
     return toWorkOrder(await this.http.post<WorkOrderDto>(`${projectPath(projectId)}/work-orders`, body))
   }
 
   async update(projectId: string, workOrderId: string, draft: WorkOrderUpdateDraft): Promise<WorkOrder> {
-    const body: Record<string, unknown> = {
-      externalNumber: draft.externalNumber,
-      statusReported: draft.statusReported,
-      parsedNotes: draft.parsedNotes,
-      adminNotes: draft.adminNotes,
-      items: draft.items.map(toWorkOrderItemRequest),
+    const body: Record<string, unknown> =
+      draft.kind === 'PREVENTIVE' || draft.kind === 'REQUIREMENT'
+        ? { title: draft.title ?? '', instructions: draft.instructions ?? '' }
+        : {
+            externalNumber: draft.externalNumber,
+            statusReported: draft.statusReported,
+            parsedNotes: draft.parsedNotes,
+            adminNotes: draft.adminNotes,
+            items: draft.items.map(toWorkOrderItemRequest),
+          }
+    if (draft.kind !== 'PREVENTIVE' && draft.kind !== 'REQUIREMENT' && draft.placeId !== undefined) {
+      body.placeId = draft.placeId
     }
-    if (draft.placeId !== undefined) body.placeId = draft.placeId
     return toWorkOrder(await this.http.put<WorkOrderDto>(`${projectPath(projectId)}/work-orders/${enc(workOrderId)}`, body))
   }
 

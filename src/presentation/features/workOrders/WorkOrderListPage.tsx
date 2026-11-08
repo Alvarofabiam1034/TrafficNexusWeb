@@ -6,7 +6,15 @@ import { useIsAdmin } from '@/application/ContainerContext'
 import { useCrews } from '@/application/hooks/useCrews'
 import { useWorkOrders } from '@/application/hooks/useWorkOrders'
 import type { Crew } from '@/domain/model/crew'
-import { maxPriority, workOrderStateLabel, type WorkOrder, type WorkOrderState } from '@/domain/model/workOrder'
+import {
+  isInstructionKind,
+  maxPriority,
+  workOrderKindLabel,
+  workOrderStateLabel,
+  type WorkOrder,
+  type WorkOrderKind,
+  type WorkOrderState,
+} from '@/domain/model/workOrder'
 import { formatPlate } from '@/domain/validation/crewValidator'
 import { routes } from '@/presentation/app/routes'
 import { Button } from '@/presentation/components/Button'
@@ -18,6 +26,14 @@ import { priorityTone, STATE_TONE, type Tone } from './workOrderTone'
 import './workOrders.css'
 
 type Filter = 'ALL' | 'DRAFT' | 'ASSIGNED' | 'IN_PROGRESS' | 'DONE'
+type KindFilter = 'ALL' | WorkOrderKind
+
+const KIND_FILTERS: readonly { key: KindFilter; label: string }[] = [
+  { key: 'ALL', label: 'Todos los tipos' },
+  { key: 'CORRECTIVE', label: 'Correctivo' },
+  { key: 'PREVENTIVE', label: 'Preventivo' },
+  { key: 'REQUIREMENT', label: 'Requerimiento' },
+]
 
 const FILTERS: readonly { key: Filter; label: string; tone: Tone }[] = [
   { key: 'ALL', label: 'Todas', tone: 'accent' },
@@ -34,6 +50,8 @@ function matchesQuery(order: WorkOrder, crew: Crew | undefined, query: string): 
   const haystack = [
     order.externalNumber,
     order.statusReported,
+    order.title,
+    order.instructions,
     order.place?.name ?? '',
     crew ? `${crew.vehiclePlate} ${crew.leadTechnician.fullName}` : '',
     ...order.items.flatMap((item) => [item.externalId, item.address, item.equipment]),
@@ -47,6 +65,7 @@ export default function WorkOrderListPage() {
   const navigate = useNavigate()
   const isAdmin = useIsAdmin()
   const [filter, setFilter] = useState<Filter>('ALL')
+  const [kindFilter, setKindFilter] = useState<KindFilter>('ALL')
   const [search, setSearch] = useState('')
   const orders = useWorkOrders()
   const crews = useCrews()
@@ -57,8 +76,9 @@ export default function WorkOrderListPage() {
     () => (orders.data ?? []).filter((order) => matchesQuery(order, order.crewId ? crewById.get(order.crewId) : undefined, query)),
     [orders.data, crewById, query],
   )
-  const countOf = (key: Filter) => (key === 'ALL' ? searched.length : searched.filter((order) => order.state === key).length)
-  const visible = filter === 'ALL' ? searched : searched.filter((order) => order.state === (filter as WorkOrderState))
+  const byKind = kindFilter === 'ALL' ? searched : searched.filter((order) => order.kind === kindFilter)
+  const countOf = (key: Filter) => (key === 'ALL' ? byKind.length : byKind.filter((order) => order.state === key).length)
+  const visible = filter === 'ALL' ? byKind : byKind.filter((order) => order.state === (filter as WorkOrderState))
 
   return (
     <>
@@ -106,12 +126,27 @@ export default function WorkOrderListPage() {
               })}
             </div>
 
+            <div className="chip-row" role="tablist" aria-label="Filtrar por tipo">
+              {KIND_FILTERS.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={kindFilter === item.key}
+                  className={['chip', kindFilter === item.key ? 'chip--selected' : ''].join(' ')}
+                  onClick={() => setKindFilter(item.key)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+
             <div className="wo-toolbar">
               <label className="wo-search">
                 <Search aria-hidden />
                 <input
                   type="search"
-                  placeholder="Buscar por externo, ID, dirección, placa o técnico…"
+                  placeholder="Buscar por tipo, título, externo, dirección, placa o técnico…"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   aria-label="Buscar órdenes"
@@ -151,6 +186,7 @@ export default function WorkOrderListPage() {
 
 function WorkOrderCard({ order, crew, onOpen }: { order: WorkOrder; crew: Crew | undefined; onOpen: () => void }) {
   const tone = STATE_TONE[order.state]
+  const instruction = isInstructionKind(order.kind)
   const priority = maxPriority(order.items)
   const when = order.closedAt ?? order.assignedAt ?? order.createdAt
   const placeLabel = order.place?.name?.trim() || null
@@ -167,10 +203,11 @@ function WorkOrderCard({ order, crew, onOpen }: { order: WorkOrder; crew: Crew |
     <button type="button" className={`wo-card wo-card--${tone}`} onClick={onOpen}>
       <div className="wo-card__head">
         <div className="wo-card__title">
-          <span className="wo-card__label">Externo</span>
-          <span className="wo-card__number">{order.externalNumber || '—'}</span>
+          <span className="wo-card__label">{instruction ? workOrderKindLabel(order.kind) : 'Externo'}</span>
+          <span className="wo-card__number">{instruction ? order.title || 'Sin título' : order.externalNumber || '—'}</span>
         </div>
         <div className="wo-card__chips">
+          <span className="tone-pill tone-pill--neutral">{workOrderKindLabel(order.kind)}</span>
           <span className={`tone-pill tone-pill--dot tone-pill--${tone}`}>{workOrderStateLabel(order.state)}</span>
           {priority ? <span className={`tone-pill tone-pill--${priorityTone(priority)}`}>{priority}</span> : null}
         </div>

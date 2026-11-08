@@ -220,6 +220,9 @@ export interface WorkOrderDto {
   rawMessage?: string
   parsedNotes?: string
   adminNotes?: string
+  kind?: string
+  title?: string
+  instructions?: string
   state?: string
   crewId?: string | null
   assignedAt?: string | null

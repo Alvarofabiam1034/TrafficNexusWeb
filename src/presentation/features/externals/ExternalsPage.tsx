@@ -29,7 +29,9 @@ import { workfrontColor, workfronts, type Workfront } from '@/domain/map/workfro
 import { EMPTY_MAP, type MapPlace, type StoredMap } from '@/domain/model/map'
 import {
   externalNumberFromPlaceName,
+  isInstructionKind,
   maxPriority,
+  workOrderKindLabel,
   workOrderStateLabel,
   type WorkOrder,
   type WorkOrderState,
@@ -37,7 +39,15 @@ import {
 import { formatPhone, formatPlate } from '@/domain/validation/crewValidator'
 import type { LayerPreferences } from '@/domain/repository'
 import { parseKmlFile } from '@/infrastructure/kml/kmlParser'
-import type { MapCameraTarget } from '@/infrastructure/maps/googleMaps'
+import {
+  loadPlacesLibrary,
+  newAddressSession,
+  resolveAddress,
+  suggestAddresses,
+  type AddressSuggestion,
+  type MapCameraTarget,
+  type ResolvedAddress,
+} from '@/infrastructure/maps/googleMaps'
 import { routes } from '@/presentation/app/routes'
 import { Button, IconButton } from '@/presentation/components/Button'
 import { Dialog } from '@/presentation/components/Dialog'
@@ -48,7 +58,7 @@ import { useNow } from '@/presentation/components/useNow'
 import { formatDateTime, plural, roleLabel } from '@/presentation/i18n/labels'
 
 import { priorityTone, STATE_TONE } from '../workOrders/workOrderTone'
-import { GoogleMapView, type CrewMapPin } from './GoogleMapView'
+import { GoogleMapView, type CrewMapPin, type RequirementMapPin } from './GoogleMapView'
 import './externals.css'
 
 const MAX_FILE_BYTES = 25 * 1024 * 1024
@@ -118,6 +128,14 @@ function ExternalsMap({
   const [target, setTarget] = useState<MapCameraTarget | null>(null)
   const [trackingOpen, setTrackingOpen] = useState(false)
   const [selectedCrewId, setSelectedCrewId] = useState<string | null>(null)
+  const [assignPlace, setAssignPlace] = useState<MapPlace | null>(null)
+  const [addressQuery, setAddressQuery] = useState('')
+  const [addressHits, setAddressHits] = useState<AddressSuggestion[]>([])
+  const [addressError, setAddressError] = useState<string | null>(null)
+  const [addressPick, setAddressPick] = useState<ResolvedAddress | null>(null)
+  const [selectedRequirementId, setSelectedRequirementId] = useState<string | null>(null)
+  const addressSession = useRef<google.maps.places.AutocompleteSessionToken | null>(null)
+  const navigate = useNavigate()
   const [fitToken, setFitToken] = useState(0)
   const [fittedToken, setFittedToken] = useState(0)
   const orders = useWorkOrders()
@@ -197,6 +215,8 @@ function ExternalsMap({
     setShownMap(map)
     setSelectedPlaceId(null)
     setSelectedCrewId(null)
+    setSelectedRequirementId(null)
+    setAddressPick(null)
     setWorkfront(null)
   }
 
@@ -223,7 +243,77 @@ function ExternalsMap({
   const selectPlace = (placeId: string) => {
     setSelectedPlaceId(placeId)
     setSelectedCrewId(null)
+    setSelectedRequirementId(null)
+    setAddressPick(null)
     if (!window.matchMedia(WIDE_SCREEN).matches) setTrackingOpen(false)
+  }
+
+  useEffect(() => {
+    const text = addressQuery.trim()
+    if (text.length < 3) {
+      setAddressHits([])
+      setAddressError(null)
+      return
+    }
+    let cancelled = false
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          await loadPlacesLibrary()
+          if (!addressSession.current) addressSession.current = newAddressSession()
+          const hits = await suggestAddresses(text, addressSession.current)
+          if (cancelled) return
+          setAddressHits(hits)
+          setAddressError(null)
+        } catch (error) {
+          if (cancelled) return
+          setAddressHits([])
+          setAddressError(messageOf(error, 'No se pudo buscar la dirección. Revisa que Places API esté habilitada.'))
+        }
+      })()
+    }, 350)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [addressQuery])
+
+  const chooseAddress = async (hit: AddressSuggestion) => {
+    try {
+      const resolved = await resolveAddress(hit.prediction)
+      addressSession.current = null
+      setAddressPick(resolved)
+      setAddressQuery('')
+      setAddressHits([])
+      setAddressError(null)
+      setSelectedPlaceId(null)
+      setSelectedRequirementId(null)
+      setSelectedCrewId(null)
+      setTarget((prev) => ({
+        key: (prev?.key ?? 0) + 1,
+        kind: 'center',
+        center: { lat: resolved.latitude, lng: resolved.longitude },
+        zoom: 17,
+      }))
+    } catch (error) {
+      setAddressError(messageOf(error, 'No se pudo usar esa dirección'))
+    }
+  }
+
+  const selectRequirement = (id: string) => {
+    const order = (orders.data ?? []).find((item) => item.id === id)
+    setSelectedRequirementId(id)
+    setSelectedPlaceId(null)
+    setAddressPick(null)
+    setSelectedCrewId(null)
+    if (order?.place) {
+      setTarget((prev) => ({
+        key: (prev?.key ?? 0) + 1,
+        kind: 'center',
+        center: { lat: order.place!.latitude, lng: order.place!.longitude },
+        zoom: 17,
+      }))
+    }
   }
 
   const focusCrew = (crewId: string) => {
@@ -300,6 +390,31 @@ function ExternalsMap({
     }
   }
 
+  const requirementPins = useMemo<RequirementMapPin[]>(() => {
+    return (orders.data ?? [])
+      .filter((order) => order.kind === 'REQUIREMENT' && isActiveOrder(order) && order.place)
+      .map((order) => ({
+        id: order.id,
+        title: order.title || order.place?.name || 'Requerimiento',
+        latitude: order.place!.latitude,
+        longitude: order.place!.longitude,
+        color: STATE_MARKER_COLOR[order.state] ?? '#C084FC',
+      }))
+  }, [orders.data])
+  const selectedRequirement = (orders.data ?? []).find((order) => order.id === selectedRequirementId) ?? null
+
+  const openTypedOrder = (kind: 'CORRECTIVE' | 'PREVENTIVE') => {
+    if (!assignPlace) return
+    const params = new URLSearchParams({ placeId: assignPlace.id, kind })
+    const externalNumber = externalNumberFromPlaceName(assignPlace.name)
+    if (externalNumber) params.set('external', externalNumber)
+    if (assignPlace.name.trim()) params.set('placeName', assignPlace.name.trim())
+    params.set('lat', String(assignPlace.latitude))
+    params.set('lng', String(assignPlace.longitude))
+    setAssignPlace(null)
+    navigate(`${routes.workOrderNew}?${params.toString()}`)
+  }
+
   const isEmpty = !loading && map.places.length === 0 && map.lines.length === 0
 
   return (
@@ -317,6 +432,14 @@ function ExternalsMap({
         crewsVisible={isAdmin && layers.crewsVisible}
         selectedCrewId={selectedCrewId}
         onSelectCrew={focusCrew}
+        requirements={requirementPins}
+        selectedRequirementId={selectedRequirementId}
+        onSelectRequirement={selectRequirement}
+        addressPin={
+          addressPick
+            ? { latitude: addressPick.latitude, longitude: addressPick.longitude, title: addressPick.address }
+            : null
+        }
       />
 
       <div className="externals__top">
@@ -352,6 +475,36 @@ function ExternalsMap({
             </ul>
           ) : null}
         </div>
+        {isAdmin ? (
+          <div className="externals__search">
+            <Search size={18} />
+            <input
+              type="search"
+              placeholder="Buscar dirección…"
+              aria-label="Buscar dirección"
+              value={addressQuery}
+              onChange={(event) => setAddressQuery(event.target.value)}
+            />
+            {addressQuery ? (
+              <IconButton label="Limpiar dirección" size="sm" onClick={() => setAddressQuery('')}>
+                <X />
+              </IconButton>
+            ) : null}
+            {addressHits.length > 0 ? (
+              <ul className="externals__results" role="listbox">
+                {addressHits.map((hit) => (
+                  <li key={hit.id}>
+                    <button type="button" role="option" onClick={() => void chooseAddress(hit)}>
+                      <MapPin size={16} />
+                      <span>{hit.label}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {addressError ? <p className="externals__search-error">{addressError}</p> : null}
+          </div>
+        ) : null}
         <div className="externals__actions">
           <button
             type="button"
@@ -462,6 +615,7 @@ function ExternalsMap({
           belowFronts={fronts.length > 0}
           selectedPlaceId={selectedPlaceId}
           placeIdOf={(order) => placeIdByOrder.get(order.id) ?? null}
+          onFocusRequirement={selectRequirement}
           onFocus={(placeId) => {
             const place = map.places.find((item) => item.id === placeId)
             if (place) focusPlace(place)
@@ -475,8 +629,25 @@ function ExternalsMap({
           place={selectedPlace}
           orders={placeOrders.get(selectedPlace.id) ?? []}
           crewById={crewById}
+          onAssign={() => setAssignPlace(selectedPlace)}
           onClose={() => setSelectedPlaceId(null)}
         />
+      ) : addressPick ? (
+        <AddressPickCard
+          address={addressPick}
+          onAssign={() => {
+            const params = new URLSearchParams({
+              kind: 'REQUIREMENT',
+              address: addressPick.address,
+              lat: String(addressPick.latitude),
+              lng: String(addressPick.longitude),
+            })
+            navigate(`${routes.workOrderNew}?${params.toString()}`)
+          }}
+          onClose={() => setAddressPick(null)}
+        />
+      ) : selectedRequirement ? (
+        <RequirementCard order={selectedRequirement} onClose={() => setSelectedRequirementId(null)} />
       ) : selectedCrew ? (
         <CrewCard crew={selectedCrew} nowMs={now.getTime()} onClose={() => setSelectedCrewId(null)} />
       ) : isAdmin && layers.crewsVisible && !trackingOpen ? (
@@ -488,6 +659,19 @@ function ExternalsMap({
           onRetry={() => void crewLocations.refetch()}
         />
       ) : null}
+
+      <Dialog open={assignPlace !== null} title="Tipo de orden" onClose={() => setAssignPlace(null)}>
+        <p className="externals__kind-copy">
+          {assignPlace?.name ? `${assignPlace.name}. ` : ''}
+          El correctivo sigue el reporte de WhatsApp. El preventivo lleva las instrucciones que escribas.
+        </p>
+        <div className="externals__kind-actions">
+          <Button onClick={() => openTypedOrder('CORRECTIVE')}>Mantenimiento correctivo</Button>
+          <Button variant="outlined" onClick={() => openTypedOrder('PREVENTIVE')}>
+            Mantenimiento preventivo
+          </Button>
+        </div>
+      </Dialog>
 
       <Dialog open={layersOpen} onClose={() => setLayersOpen(false)} title="Capas" icon={<Layers />}>
         <div className="stack">
@@ -566,6 +750,7 @@ function TrackingPanel({
   selectedPlaceId,
   placeIdOf,
   onFocus,
+  onFocusRequirement,
   onClose,
 }: {
   orders: readonly WorkOrder[]
@@ -575,6 +760,7 @@ function TrackingPanel({
   selectedPlaceId: string | null
   placeIdOf: (order: WorkOrder) => string | null
   onFocus: (placeId: string) => void
+  onFocusRequirement: (orderId: string) => void
   onClose: () => void
 }) {
   const navigate = useNavigate()
@@ -631,9 +817,12 @@ function TrackingPanel({
         ) : null}
         {visible.map((order) => {
           const placeId = placeIdOf(order)
+          const requirement = order.kind === 'REQUIREMENT'
+          const canFocus = requirement || Boolean(placeId)
           const crew = order.crewId ? crewById.get(order.crewId) : undefined
           const tone = STATE_TONE[order.state]
           const priority = maxPriority(order.items)
+          const headline = isInstructionKind(order.kind) ? order.title || workOrderKindLabel(order.kind) : order.externalNumber || '—'
           return (
             <div
               key={order.id}
@@ -642,12 +831,16 @@ function TrackingPanel({
               <button
                 type="button"
                 className="externals__ot-main"
-                disabled={!placeId}
-                title={placeId ? 'Ver en el mapa' : 'El punto no está en el mapa actual'}
-                onClick={() => placeId && onFocus(placeId)}
+                disabled={!canFocus}
+                title={canFocus ? 'Ver en el mapa' : 'El punto no está en el mapa actual'}
+                onClick={() => {
+                  if (requirement) onFocusRequirement(order.id)
+                  else if (placeId) onFocus(placeId)
+                }}
               >
                 <span className="externals__ot-top">
-                  <span className="externals__ot-number">{order.externalNumber || '—'}</span>
+                  <span className="externals__ot-number">{headline}</span>
+                  <span className="tone-pill tone-pill--neutral">{workOrderKindLabel(order.kind)}</span>
                   <span className={`tone-pill tone-pill--dot tone-pill--${tone}`}>{workOrderStateLabel(order.state)}</span>
                   {priority ? <span className={`tone-pill tone-pill--${priorityTone(priority)}`}>{priority}</span> : null}
                 </span>
@@ -678,17 +871,89 @@ function TrackingPanel({
   )
 }
 
+function AddressPickCard({
+  address,
+  onAssign,
+  onClose,
+}: {
+  address: ResolvedAddress
+  onAssign: () => void
+  onClose: () => void
+}) {
+  return (
+    <aside className="externals__place externals__place--accent" aria-label="Dirección encontrada">
+      <div className="externals__place-head">
+        <span className="externals__place-icon">
+          <MapPin />
+        </span>
+        <div className="externals__place-title">
+          <h3>{address.address}</h3>
+          <span className="mono muted" style={{ fontSize: '0.75rem' }}>
+            {address.latitude.toFixed(6)}, {address.longitude.toFixed(6)}
+          </span>
+        </div>
+        <IconButton label="Cerrar" size="sm" onClick={onClose}>
+          <X />
+        </IconButton>
+      </div>
+      <div className="externals__place-status">
+        <span className="tone-pill tone-pill--accent">Requerimiento</span>
+      </div>
+      <p className="externals__place-text">Esta dirección no es un externo del mapa. Puedes crear un requerimiento con instrucciones.</p>
+      <div className="externals__place-actions">
+        <Button icon={<ClipboardPlus />} onClick={onAssign}>
+          Asignar requerimiento
+        </Button>
+      </div>
+    </aside>
+  )
+}
+
+function RequirementCard({ order, onClose }: { order: WorkOrder; onClose: () => void }) {
+  const navigate = useNavigate()
+  const tone = STATE_TONE[order.state]
+  return (
+    <aside className={`externals__place externals__place--${tone}`} aria-label="Requerimiento">
+      <div className="externals__place-head">
+        <span className="externals__place-icon">
+          <MapPin />
+        </span>
+        <div className="externals__place-title">
+          <h3>{order.title || 'Requerimiento'}</h3>
+          <span className="mono muted" style={{ fontSize: '0.75rem' }}>
+            {order.place?.name || 'Sin dirección'}
+          </span>
+        </div>
+        <IconButton label="Cerrar" size="sm" onClick={onClose}>
+          <X />
+        </IconButton>
+      </div>
+      <div className="externals__place-status">
+        <span className={`tone-pill tone-pill--dot tone-pill--${tone}`}>{workOrderStateLabel(order.state)}</span>
+        <span className="tone-pill tone-pill--neutral">Requerimiento</span>
+      </div>
+      <div className="externals__place-actions">
+        <Button icon={<ClipboardList />} onClick={() => navigate(routes.workOrder(order.id))}>
+          Ver orden
+        </Button>
+      </div>
+    </aside>
+  )
+}
+
 const PLACE_HISTORY_LIMIT = 5
 
 function PlaceCard({
   place,
   orders,
   crewById,
+  onAssign,
   onClose,
 }: {
   place: MapPlace
   orders: readonly WorkOrder[]
   crewById: ReadonlyMap<string, Crew>
+  onAssign: () => void
   onClose: () => void
 }) {
   const navigate = useNavigate()
@@ -702,15 +967,6 @@ function PlaceCard({
     const href = previewUrl ?? place.documentation
     if (href) window.open(href, '_blank', 'noopener,noreferrer')
   }
-  const assignOt = () => {
-    const params = new URLSearchParams({ placeId: place.id })
-    if (externalNumber) params.set('external', externalNumber)
-    if (place.name.trim()) params.set('placeName', place.name.trim())
-    params.set('lat', String(place.latitude))
-    params.set('lng', String(place.longitude))
-    navigate(`${routes.workOrderNew}?${params.toString()}`)
-  }
-
   const tone = activeState ? STATE_TONE[activeState] : 'accent'
 
   return (
@@ -776,7 +1032,7 @@ function PlaceCard({
 
       <div className="externals__place-actions">
         {isAdmin ? (
-          <Button icon={<ClipboardPlus />} onClick={assignOt}>
+          <Button icon={<ClipboardPlus />} onClick={onAssign}>
             Asignar OT
           </Button>
         ) : null}

@@ -16,6 +16,9 @@ function order(id: string, state: WorkOrderState, placeId: string | null, lat = 
     rawMessage: '',
     parsedNotes: '',
     adminNotes: '',
+    kind: 'CORRECTIVE',
+    title: '',
+    instructions: '',
     state,
     crewId: null,
     assignedAt: null,
@@ -43,6 +46,13 @@ describe('placeOrders', () => {
       order('c', 'DRAFT', null),
     ])
     expect(grouped.get('p1')?.map((item) => item.id)).toEqual(['b', 'a'])
+  })
+
+  it('no mezcla un requerimiento con el punto que comparte coordenadas', () => {
+    const places = [place('p1', 4.6, -74.1)]
+    const requirement = { ...order('req', 'ASSIGNED', 'p1'), kind: 'REQUIREMENT' as const }
+    const grouped = ordersByPlace(places, [requirement, order('ot', 'ASSIGNED', 'p1')])
+    expect(grouped.get('p1')?.map((item) => item.id)).toEqual(['ot'])
   })
 
   it('reconoce el punto por coordenadas cuando el mapa se reimportó', () => {
