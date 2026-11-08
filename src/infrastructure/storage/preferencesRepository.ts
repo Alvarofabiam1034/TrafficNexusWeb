@@ -7,15 +7,16 @@ export class LocalPreferencesRepository implements PreferencesRepository {
 
   layers(): LayerPreferences {
     const raw = this.storage.getItem(LAYERS_KEY)
-    if (!raw) return { pointsVisible: true, linesVisible: true }
+    if (!raw) return { pointsVisible: true, linesVisible: true, crewsVisible: false }
     try {
       const parsed = JSON.parse(raw) as Partial<LayerPreferences>
       return {
         pointsVisible: parsed.pointsVisible !== false,
         linesVisible: parsed.linesVisible !== false,
+        crewsVisible: parsed.crewsVisible === true,
       }
     } catch {
-      return { pointsVisible: true, linesVisible: true }
+      return { pointsVisible: true, linesVisible: true, crewsVisible: false }
     }
   }
 

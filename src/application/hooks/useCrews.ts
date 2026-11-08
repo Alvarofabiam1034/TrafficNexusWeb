@@ -4,8 +4,11 @@ import type { Crew } from '@/domain/model/crew'
 import type { CrewShift } from '@/domain/model/shift'
 import type { CrewDraft, ShiftDraft } from '@/domain/repository'
 
-import { useContainer, useRequiredSession } from '../ContainerContext'
+import { useContainer, useIsAdmin, useRequiredSession } from '../ContainerContext'
 import { queryKeys } from '../queryKeys'
+
+/** Mientras la capa está visible. El API no tiene stream. */
+const CREW_LOCATION_POLL_MS = 15_000
 
 export function useCrews() {
   const { crews } = useContainer()
@@ -13,6 +16,20 @@ export function useCrews() {
   return useQuery({
     queryKey: queryKeys.crews(projectId),
     queryFn: () => crews.list(projectId),
+  })
+}
+
+export function useCrewLocations(visible: boolean) {
+  const { crews } = useContainer()
+  const { projectId } = useRequiredSession()
+  const isAdmin = useIsAdmin()
+  const enabled = visible && isAdmin
+  return useQuery({
+    queryKey: queryKeys.crewLocations(projectId),
+    queryFn: () => crews.locations(projectId),
+    enabled,
+    refetchInterval: enabled ? CREW_LOCATION_POLL_MS : false,
+    refetchIntervalInBackground: false,
   })
 }
 

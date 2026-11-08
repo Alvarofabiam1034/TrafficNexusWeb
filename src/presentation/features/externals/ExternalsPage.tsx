@@ -10,16 +10,18 @@ import {
   MapPin,
   Route,
   Search,
+  Users,
   X,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { useContainer, useIsAdmin } from '@/application/ContainerContext'
-import { useCrews } from '@/application/hooks/useCrews'
+import { useCrewLocations, useCrews } from '@/application/hooks/useCrews'
 import { useImportMap, useLatestMap, useMapVersion, useMapVersions } from '@/application/hooks/useMap'
 import { useWorkOrders } from '@/application/hooks/useWorkOrders'
 import type { Crew } from '@/domain/model/crew'
+import { crewFixAgeLabel, isCrewFixStale, type CrewLocation } from '@/domain/model/crewLocation'
 import { messageOf } from '@/domain/errors'
 import { drivePreviewUrl } from '@/domain/map/drivePreview'
 import { ACTIVE_STATES, activeStateOf, isActiveOrder, ordersByPlace } from '@/domain/map/placeOrders'
@@ -32,7 +34,7 @@ import {
   type WorkOrder,
   type WorkOrderState,
 } from '@/domain/model/workOrder'
-import { formatPlate } from '@/domain/validation/crewValidator'
+import { formatPhone, formatPlate } from '@/domain/validation/crewValidator'
 import type { LayerPreferences } from '@/domain/repository'
 import { parseKmlFile } from '@/infrastructure/kml/kmlParser'
 import type { MapCameraTarget } from '@/infrastructure/maps/googleMaps'
@@ -42,10 +44,11 @@ import { Dialog } from '@/presentation/components/Dialog'
 import { ErrorState, InlineMessage, Loading } from '@/presentation/components/States'
 import { Switch } from '@/presentation/components/Switch'
 import { useToast } from '@/presentation/components/Toast'
-import { formatDateTime, plural } from '@/presentation/i18n/labels'
+import { useNow } from '@/presentation/components/useNow'
+import { formatDateTime, plural, roleLabel } from '@/presentation/i18n/labels'
 
 import { priorityTone, STATE_TONE } from '../workOrders/workOrderTone'
-import { GoogleMapView } from './GoogleMapView'
+import { GoogleMapView, type CrewMapPin } from './GoogleMapView'
 import './externals.css'
 
 const MAX_FILE_BYTES = 25 * 1024 * 1024
@@ -114,8 +117,13 @@ function ExternalsMap({
   const [importing, setImporting] = useState(false)
   const [target, setTarget] = useState<MapCameraTarget | null>(null)
   const [trackingOpen, setTrackingOpen] = useState(false)
+  const [selectedCrewId, setSelectedCrewId] = useState<string | null>(null)
+  const [fitToken, setFitToken] = useState(0)
+  const [fittedToken, setFittedToken] = useState(0)
   const orders = useWorkOrders()
   const crews = useCrews()
+  const now = useNow()
+  const crewLocations = useCrewLocations(isAdmin && layers.crewsVisible)
 
   useEffect(() => preferences.saveLayers(layers), [layers, preferences])
 
@@ -136,12 +144,59 @@ function ExternalsMap({
     return index
   }, [placeOrders])
   const activeOrders = useMemo(() => (orders.data ?? []).filter(isActiveOrder), [orders.data])
+  const locatedCrews = useMemo(
+    () => (crewLocations.data ?? []).filter((crew) => crew.location !== null),
+    [crewLocations.data],
+  )
+  const crewPins = useMemo(() => {
+    const nowMs = now.getTime()
+    const pins: CrewMapPin[] = []
+    for (const crew of locatedCrews) {
+      const fix = crew.location
+      if (!fix) continue
+      pins.push({
+        id: crew.crewId,
+        label: formatPlate(crew.plate),
+        title: `${crew.lead.fullName} · ${formatPlate(crew.plate)}`,
+        latitude: fix.latitude,
+        longitude: fix.longitude,
+        accuracyMeters: fix.accuracyMeters,
+        stale: isCrewFixStale(fix.receivedAt, nowMs),
+      })
+    }
+    return pins
+  }, [locatedCrews, now])
+  const selectedCrew = locatedCrews.find((crew) => crew.crewId === selectedCrewId) ?? null
+
+  const setCrewsVisible = (crewsVisible: boolean) => {
+    setLayers((current) => ({ ...current, crewsVisible }))
+    if (!crewsVisible) {
+      setSelectedCrewId(null)
+      return
+    }
+    setFitToken((value) => value + 1)
+  }
+
+  if (fitToken !== fittedToken && layers.crewsVisible && !crewLocations.isPending) {
+    setFittedToken(fitToken)
+    const points = locatedCrews.flatMap((crew) =>
+      crew.location ? [{ lat: crew.location.latitude, lng: crew.location.longitude }] : [],
+    )
+    if (points.length > 0) {
+      setTarget((prev) => ({ key: (prev?.key ?? 0) + 1, kind: 'bounds', points }))
+    }
+  }
+
+  if (selectedCrewId && !locatedCrews.some((crew) => crew.crewId === selectedCrewId)) {
+    setSelectedCrewId(null)
+  }
 
   // Al cambiar el mapa (otra versión o importación) la selección deja de tener sentido.
   const [shownMap, setShownMap] = useState(map)
   if (shownMap !== map) {
     setShownMap(map)
     setSelectedPlaceId(null)
+    setSelectedCrewId(null)
     setWorkfront(null)
   }
 
@@ -167,7 +222,23 @@ function ExternalsMap({
 
   const selectPlace = (placeId: string) => {
     setSelectedPlaceId(placeId)
+    setSelectedCrewId(null)
     if (!window.matchMedia(WIDE_SCREEN).matches) setTrackingOpen(false)
+  }
+
+  const focusCrew = (crewId: string) => {
+    const crew = locatedCrews.find((item) => item.crewId === crewId)
+    const fix = crew?.location
+    if (!fix) return
+    setSelectedPlaceId(null)
+    setSelectedCrewId(crewId)
+    if (!window.matchMedia(WIDE_SCREEN).matches) setTrackingOpen(false)
+    setTarget((prev) => ({
+      key: (prev?.key ?? 0) + 1,
+      kind: 'center',
+      center: { lat: fix.latitude, lng: fix.longitude },
+      zoom: 16,
+    }))
   }
 
   const focusPlace = (place: MapPlace) => {
@@ -242,6 +313,10 @@ function ExternalsMap({
         target={target}
         onSelectPlace={selectPlace}
         placeColors={placeColors}
+        crews={crewPins}
+        crewsVisible={isAdmin && layers.crewsVisible}
+        selectedCrewId={selectedCrewId}
+        onSelectCrew={focusCrew}
       />
 
       <div className="externals__top">
@@ -288,6 +363,21 @@ function ExternalsMap({
             <span>Seguimiento</span>
             {activeOrders.length > 0 ? <span className="externals__count">{activeOrders.length}</span> : null}
           </button>
+          {isAdmin ? (
+            <button
+              type="button"
+              className={`externals__tracking-toggle${layers.crewsVisible ? ' is-on' : ''}`}
+              aria-pressed={layers.crewsVisible}
+              title="Mostrar u ocultar la última posición de cada cuadrilla"
+              onClick={() => setCrewsVisible(!layers.crewsVisible)}
+            >
+              <Users />
+              <span>Cuadrillas</span>
+              {layers.crewsVisible && crewLocations.data ? (
+                <span className="externals__count">{locatedCrews.length}</span>
+              ) : null}
+            </button>
+          ) : null}
           <IconButton label="Capas" onClick={() => setLayersOpen(true)}>
             <Layers />
           </IconButton>
@@ -387,6 +477,16 @@ function ExternalsMap({
           crewById={crewById}
           onClose={() => setSelectedPlaceId(null)}
         />
+      ) : selectedCrew ? (
+        <CrewCard crew={selectedCrew} nowMs={now.getTime()} onClose={() => setSelectedCrewId(null)} />
+      ) : isAdmin && layers.crewsVisible && !trackingOpen ? (
+        <CrewStrip
+          crews={locatedCrews}
+          nowMs={now.getTime()}
+          failed={crewLocations.isError}
+          onFocus={focusCrew}
+          onRetry={() => void crewLocations.refetch()}
+        />
       ) : null}
 
       <Dialog open={layersOpen} onClose={() => setLayersOpen(false)} title="Capas" icon={<Layers />}>
@@ -411,10 +511,29 @@ function ExternalsMap({
               label="Mostrar trazos"
             />
           </label>
+          {isAdmin ? (
+            <label className="row externals__layer">
+              <span>
+                <Users size={18} /> Cuadrillas
+              </span>
+              <Switch checked={layers.crewsVisible} onChange={setCrewsVisible} label="Mostrar cuadrillas" />
+            </label>
+          ) : null}
           <p className="muted" style={{ fontSize: '0.8125rem' }}>
             {plural(map.places.length, 'punto', 'puntos')} · {plural(map.lines.length, 'trazo', 'trazos')} ·{' '}
             {plural(fronts.length, 'frente', 'frentes')}
+            {isAdmin && layers.crewsVisible && crewLocations.data
+              ? ` · ${plural(locatedCrews.length, 'cuadrilla en el mapa', 'cuadrillas en el mapa')}`
+              : ''}
           </p>
+          {isAdmin && layers.crewsVisible ? (
+            <p className="muted" style={{ fontSize: '0.8125rem' }}>
+              Se actualiza sola. El pin se pone gris si el servidor recibió la posición hace más de 15 minutos.
+              {crewLocations.data && crewLocations.data.length > locatedCrews.length
+                ? ` ${plural(crewLocations.data.length - locatedCrews.length, 'cuadrilla nunca reportó', 'cuadrillas nunca reportaron')}.`
+                : ''}
+            </p>
+          ) : null}
         </div>
       </Dialog>
 
@@ -729,5 +848,128 @@ function VersionsDialog({
         </div>
       ) : null}
     </Dialog>
+  )
+}
+
+function formatAccuracy(meters: number): string {
+  if (meters >= 1000) {
+    const kilometers = meters / 1000
+    return `± ${kilometers >= 10 ? Math.round(kilometers) : kilometers.toFixed(1)} km`
+  }
+  return `± ${Math.round(meters)} m`
+}
+
+function CrewStrip({
+  crews,
+  nowMs,
+  failed,
+  onFocus,
+  onRetry,
+}: {
+  crews: readonly CrewLocation[]
+  nowMs: number
+  failed: boolean
+  onFocus: (crewId: string) => void
+  onRetry: () => void
+}) {
+  if (crews.length === 0) {
+    return (
+      <div className="externals__crews">
+        <span className="externals__crews-empty">
+          {failed ? 'No se pudo cargar la posición de las cuadrillas' : 'Ninguna cuadrilla ha reportado posición'}
+          {failed ? (
+            <Button variant="text" size="sm" onClick={onRetry}>
+              Reintentar
+            </Button>
+          ) : null}
+        </span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="externals__crews chip-row" role="list">
+      {crews.map((crew) => {
+        const stale = crew.location ? isCrewFixStale(crew.location.receivedAt, nowMs) : false
+        return (
+          <button
+            key={crew.crewId}
+            type="button"
+            className={['chip', stale ? 'chip--stale' : ''].join(' ')}
+            title={crew.lead.fullName}
+            onClick={() => onFocus(crew.crewId)}
+          >
+            {formatPlate(crew.plate)}
+          </button>
+        )
+      })}
+      {failed ? (
+        <button type="button" className="chip" onClick={onRetry}>
+          Reintentar
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
+function CrewCard({ crew, nowMs, onClose }: { crew: CrewLocation; nowMs: number; onClose: () => void }) {
+  const navigate = useNavigate()
+  const fix = crew.location
+  if (!fix) return null
+  const stale = isCrewFixStale(fix.receivedAt, nowMs)
+  const age = crewFixAgeLabel(fix.receivedAt, nowMs)
+  const members = [crew.lead, crew.auxiliary, crew.boom]
+  return (
+    <article className={`externals__place${stale ? ' externals__place--caution' : ''}`} aria-label={crew.lead.fullName}>
+      <div className="externals__place-head">
+        <span className="externals__place-icon">
+          <Users />
+        </span>
+        <div className="externals__place-title">
+          <h3>{crew.lead.fullName}</h3>
+          <span className="plate-tag">{formatPlate(crew.plate)}</span>
+        </div>
+        <IconButton label="Cerrar" size="sm" onClick={onClose}>
+          <X />
+        </IconButton>
+      </div>
+      <div className="externals__place-status">
+        <span className={`tone-pill tone-pill--dot tone-pill--${stale ? 'caution' : 'accent'}`}>
+          {stale ? `Posición vieja · ${age}` : `En el mapa · ${age}`}
+        </span>
+        {fix.accuracyMeters !== null && fix.accuracyMeters > 0 ? (
+          <span className="tone-pill tone-pill--neutral">{formatAccuracy(fix.accuracyMeters)}</span>
+        ) : null}
+      </div>
+      <ul className="externals__crew-members">
+        {members.map((member) => (
+          <li key={member.crewRole}>
+            <span>{roleLabel[member.crewRole]}</span>
+            <strong>{member.fullName}</strong>
+          </li>
+        ))}
+      </ul>
+      <p className="externals__crew-when">
+        GPS {fix.recordedAt ? formatDateTime(fix.recordedAt) : 'sin hora'}
+        {' · '}
+        recibido {fix.receivedAt ? formatDateTime(fix.receivedAt) : 'sin hora'}
+        {fix.reportedBy.fullName ? ` · envió ${fix.reportedBy.fullName}` : ''}
+      </p>
+      <div className="externals__place-actions">
+        {crew.corporatePhone ? (
+          <a className="btn btn--text btn--sm" href={`tel:${crew.corporatePhone}`}>
+            {formatPhone(crew.corporatePhone)}
+          </a>
+        ) : null}
+        <Button variant="text" size="sm" onClick={() => navigate(routes.crewEdit(crew.crewId))}>
+          Ver cuadrilla
+        </Button>
+        {crew.vehicleId ? (
+          <Button variant="text" size="sm" onClick={() => navigate(routes.vehicle(crew.vehicleId))}>
+            Ver vehículo
+          </Button>
+        ) : null}
+      </div>
+    </article>
   )
 }

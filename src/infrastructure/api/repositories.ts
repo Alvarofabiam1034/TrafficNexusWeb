@@ -1,5 +1,6 @@
 import { DomainError } from '@/domain/errors'
 import type { Crew, CrewRole } from '@/domain/model/crew'
+import { crewLocationsFromPayload, type CrewLocation } from '@/domain/model/crewLocation'
 import type {
   KitAssignment,
   KitLine,
@@ -229,6 +230,13 @@ export class ApiCrewRepository implements CrewRepository {
 
   async list(projectId: string): Promise<Crew[]> {
     return (await this.http.get<CrewDto[]>(`${projectPath(projectId)}/crews`)).map(toCrew)
+  }
+
+  async locations(projectId: string): Promise<CrewLocation[]> {
+    const body = await this.http.get<unknown>(`${projectPath(projectId)}/crew-locations`)
+    const parsed = crewLocationsFromPayload(body)
+    if (!parsed) throw new DomainError('INVALID', 'La respuesta de posiciones no es válida')
+    return parsed
   }
 
   async get(projectId: string, crewId: string): Promise<Crew> {

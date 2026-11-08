@@ -686,6 +686,141 @@
   border-radius: var(--radius-sm);
 }
 
+.externals__crews {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 1000;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  pointer-events: none;
+}
+
+.externals__crews::-webkit-scrollbar {
+  display: none;
+}
+
+.externals__crews > * {
+  pointer-events: auto;
+  flex: none;
+}
+
+.externals__crews-empty {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(22, 26, 32, 0.95);
+  border: 1px solid var(--outline-variant);
+  color: var(--fg-muted);
+  font-size: 0.8125rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.chip--stale {
+  color: var(--fg-muted);
+}
+
+.externals__crew-members {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.externals__crew-members li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.875rem;
+}
+
+.externals__crew-members span {
+  color: var(--fg-muted);
+}
+
+.externals__crew-when {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--fg-muted);
+}
+
+/* Pin de cuadrilla, dentro del mapa. El punto queda sobre la coordenada. */
+.crew-pin {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 1px));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.crew-pin__plate {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--brand-accent);
+  color: var(--brand-text);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+}
+
+.crew-pin__stem {
+  width: 2px;
+  height: 7px;
+  background: var(--brand-accent);
+}
+
+.crew-pin__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--brand-accent);
+  box-shadow: 0 0 0 2px #0e1115;
+  animation: crew-pin-pulse 2.4s ease-out infinite;
+}
+
+.crew-pin--stale .crew-pin__plate,
+.crew-pin--stale .crew-pin__stem,
+.crew-pin--stale .crew-pin__dot {
+  background: #9aa5b4;
+}
+
+.crew-pin--stale .crew-pin__dot {
+  animation: none;
+}
+
+.crew-pin--selected .crew-pin__plate {
+  box-shadow: 0 0 0 2px #fff, 0 6px 16px rgba(0, 0, 0, 0.45);
+}
+
+@keyframes crew-pin-pulse {
+  0% {
+    box-shadow: 0 0 0 2px #0e1115, 0 0 0 2px rgba(0, 214, 160, 0.45);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 2px #0e1115, 0 0 0 10px rgba(0, 214, 160, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crew-pin__dot {
+    animation: none;
+  }
+}
+
 .externals__version:hover {
   background: rgba(255, 255, 255, 0.04);
 }

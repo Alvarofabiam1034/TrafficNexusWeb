@@ -1,4 +1,5 @@
 export * from './crew'
+export * from './crewLocation'
 export * from './shift'
 export * from './inventory'
 export * from './stockAlert'

@@ -1,4 +1,5 @@
 import type { Crew, CrewRole } from '../model/crew'
+import type { CrewLocation } from '../model/crewLocation'
 import type {
   KitAssignment,
   StockMovement,
@@ -80,6 +81,8 @@ export type ShiftDraft = Omit<CrewShift, 'id'>
 
 export interface CrewRepository {
   list(projectId: string): Promise<Crew[]>
+  /** Última posición de cada cuadrilla. Solo administrador. No hay stream. */
+  locations(projectId: string): Promise<CrewLocation[]>
   get(projectId: string, crewId: string): Promise<Crew>
   create(projectId: string, draft: CrewDraft): Promise<Crew>
   update(projectId: string, crewId: string, draft: CrewDraft): Promise<Crew>
@@ -160,6 +163,8 @@ export interface MapRepository {
 export interface LayerPreferences {
   readonly pointsVisible: boolean
   readonly linesVisible: boolean
+  /** Capa de cuadrillas en el mapa. Apagada hasta que el administrador la enciende. */
+  readonly crewsVisible: boolean
 }
 
 export interface PreferencesRepository {

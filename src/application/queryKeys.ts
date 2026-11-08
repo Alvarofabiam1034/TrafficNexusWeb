@@ -4,6 +4,7 @@ export const queryKeys = {
   users: ['users'] as const,
   members: (projectId: string) => ['project', projectId, 'members'] as const,
   crews: (projectId: string) => ['project', projectId, 'crews'] as const,
+  crewLocations: (projectId: string) => ['project', projectId, 'crew-locations'] as const,
   vehicles: (projectId: string) => ['project', projectId, 'vehicles'] as const,
   vehicle: (projectId: string, vehicleId: string) => ['project', projectId, 'vehicles', vehicleId] as const,
   movements: (projectId: string, vehicleId: string) =>
